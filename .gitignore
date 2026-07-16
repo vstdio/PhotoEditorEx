@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Xcode user settings
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Builds
+build/
+DerivedData/
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+
+# CocoaPods — понадобится, только если появится Pods
+Pods/
