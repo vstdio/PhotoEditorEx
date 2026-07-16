@@ -38,6 +38,9 @@ final class EditorViewController: UIViewController {
         }
     }
 
+    private var renderedPreviewImage: UIImage?
+    private var isShowingOriginal = false
+
     private let imageView: UIImageView = {
         let imageView = UIImageView()
         imageView.backgroundColor = .secondarySystemBackground
@@ -155,8 +158,23 @@ final class EditorViewController: UIViewController {
         setupNavigationBar()
         setupLayout()
         setupActions()
+        setupBeforeAfterGesture()
 
         imageView.image = previewImage
+    }
+
+    private func setupBeforeAfterGesture() {
+        imageView.isUserInteractionEnabled = true
+
+        let gestureRecognizer = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(handleBeforeAfterGesture)
+        )
+
+        gestureRecognizer.minimumPressDuration = 0
+        gestureRecognizer.cancelsTouchesInView = false
+
+        imageView.addGestureRecognizer(gestureRecognizer)
     }
 
     private func setupNavigationBar() {
@@ -281,7 +299,10 @@ final class EditorViewController: UIViewController {
 
         guard !recipe.isNeutral else {
             previewRenderRequest = nil
-            imageView.image = previewImage
+            renderedPreviewImage = nil
+            if !isShowingOriginal {
+                imageView.image = previewImage
+            }
             return
         }
 
@@ -302,6 +323,10 @@ final class EditorViewController: UIViewController {
                     guard previewRenderRequest?.id == renderID else { return }
                     guard previewRenderRequest?.isCancelled == false else { return }
                     guard let renderedImage else { return }
+
+                    renderedPreviewImage = renderedImage
+                    guard !isShowingOriginal else { return }
+
                     imageView.image = renderedImage
                 }
             }
@@ -375,5 +400,22 @@ final class EditorViewController: UIViewController {
 
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    @objc private func handleBeforeAfterGesture(
+        _ gestureRecognizer: UILongPressGestureRecognizer
+    ) {
+        switch gestureRecognizer.state {
+        case .began:
+            isShowingOriginal = true
+            imageView.image = previewImage
+
+        case .ended, .cancelled, .failed:
+            isShowingOriginal = false
+            imageView.image = renderedPreviewImage ?? previewImage
+
+        default:
+            break
+        }
     }
 }
