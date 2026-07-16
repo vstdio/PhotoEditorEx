@@ -1,5 +1,5 @@
 //
-//  FilterRecipe.swift
+//  FilterPipeline.swift
 //  PhotoEditorEx
 //
 //  Created by Timur Karimov on 01.07.2026.
@@ -9,16 +9,6 @@ import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-struct EditRecipe {
-    var brightness: Float = 0
-    var contrast: Float = 1
-    var saturation: Float = 1
-    var exposure: Float = 0
-    var blurRadius: Float = 0
-    var sharpen: Float = 0
-    var vignette: Float = 0
-}
-
 final class FilterPipeline {
 
     private let context = CIContext(options: [
@@ -26,7 +16,11 @@ final class FilterPipeline {
     ])
 
     func renderPreview(ciImage inputImage: CIImage, recipe: EditRecipe) -> UIImage? {
-        render(ciImage: inputImage, recipe: recipe, scale: UIScreen.main.scale)
+        render(
+            ciImage: inputImage,
+            recipe: recipe,
+            scale: UIScreen.main.scale
+        )
     }
 
     func renderFullSize(image: UIImage, recipe: EditRecipe) -> UIImage? {
@@ -83,13 +77,15 @@ final class FilterPipeline {
         return filter.outputImage ?? image
     }
 
-    private func applyColorControls(to image: CIImage, recipe: EditRecipe) -> CIImage {
+    private func applyColorControls(
+        to image: CIImage,
+        recipe: EditRecipe
+    ) -> CIImage {
         let filter = CIFilter.colorControls()
         filter.inputImage = image
         filter.brightness = recipe.brightness
         filter.contrast = recipe.contrast
         filter.saturation = recipe.saturation
-
         return filter.outputImage ?? image
     }
 

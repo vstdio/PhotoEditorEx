@@ -29,6 +29,7 @@ final class AdjustmentSliderView: UIView {
 
     private let slider: UISlider = {
         let slider = UISlider()
+        slider.isContinuous = true
         return slider
     }()
 

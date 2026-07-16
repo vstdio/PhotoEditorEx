@@ -18,8 +18,7 @@ final class EditorViewController: UIViewController {
     private let filterPipeline = FilterPipeline()
     private let renderQueue = DispatchQueue(label: "PhotoLab.editor.render", qos: .userInitiated)
 
-    private var renderWorkItem: DispatchWorkItem?
-    private var renderGeneration = 0
+    private var previewRenderRequest: PreviewRenderRequest?
 
     private let exportService = PhotoExportService()
     private let exportQueue = DispatchQueue(label: "PhotoLab.editor.export", qos: .userInitiated)
@@ -30,8 +29,11 @@ final class EditorViewController: UIViewController {
         return indicator
     }()
 
-    private var recipe = EditRecipe() {
+    private var recipe: EditRecipe = .neutral {
         didSet {
+            guard oldValue != recipe else {
+                return
+            }
             scheduleRenderPreview()
         }
     }
@@ -123,7 +125,7 @@ final class EditorViewController: UIViewController {
     init(image: UIImage) {
         self.originalImage = image
 
-        let preview = image.resizedForEditorPreview(maxPixelSize: 1600)
+        let preview = image.resizedForEditorPreview(maxPixelSize: 1200)
         self.previewImage = preview
 
         if let ciImage = CIImage(image: preview) {
@@ -138,6 +140,10 @@ final class EditorViewController: UIViewController {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    deinit {
+        previewRenderRequest?.cancel()
     }
 
     override func viewDidLoad() {
@@ -252,51 +258,57 @@ final class EditorViewController: UIViewController {
     }
 
     @objc private func resetButtonTapped() {
-        recipe = EditRecipe()
-        brightnessSliderView.setValue(recipe.brightness, animated: true)
-        contrastSliderView.setValue(recipe.contrast, animated: true)
-        saturationSliderView.setValue(recipe.saturation, animated: true)
-        exposureSliderView.setValue(recipe.exposure, animated: true)
-        blurSliderView.setValue(recipe.blurRadius, animated: true)
-        sharpenSliderView.setValue(recipe.sharpen, animated: true)
-        vignetteSliderView.setValue(recipe.vignette, animated: true)
+        let neutralRecipe = EditRecipe.neutral
+        updateControls(with: neutralRecipe, animated: true)
+        recipe = neutralRecipe
+    }
+
+    private func updateControls(
+        with recipe: EditRecipe,
+        animated: Bool
+    ) {
+        brightnessSliderView.setValue(recipe.brightness, animated: animated)
+        contrastSliderView.setValue(recipe.contrast, animated: animated)
+        saturationSliderView.setValue(recipe.saturation, animated: animated)
+        exposureSliderView.setValue(recipe.exposure, animated: animated)
+        blurSliderView.setValue(recipe.blurRadius, animated: animated)
+        sharpenSliderView.setValue(recipe.sharpen, animated: animated)
+        vignetteSliderView.setValue(recipe.vignette, animated: animated)
     }
 
     private func scheduleRenderPreview() {
-        renderGeneration += 1
+        previewRenderRequest?.cancel()
 
-        let currentGeneration = renderGeneration
+        guard !recipe.isNeutral else {
+            previewRenderRequest = nil
+            imageView.image = previewImage
+            return
+        }
+
         let currentRecipe = recipe
         let inputImage = previewCIImage
         let pipeline = filterPipeline
 
-        renderWorkItem?.cancel()
-
-        let workItem = DispatchWorkItem {
-            let renderedImage = pipeline.renderPreview(
-                ciImage: inputImage,
-                recipe: currentRecipe
-            )
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
+        let request = PreviewRenderRequest(
+            render: {
+                pipeline.renderPreview(
+                    ciImage: inputImage,
+                    recipe: currentRecipe
+                )
+            },
+            completion: { [weak self] renderID, renderedImage in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard previewRenderRequest?.id == renderID else { return }
+                    guard previewRenderRequest?.isCancelled == false else { return }
+                    guard let renderedImage else { return }
+                    imageView.image = renderedImage
                 }
-
-                guard currentGeneration == self.renderGeneration else {
-                    return
-                }
-
-                guard let renderedImage else {
-                    return
-                }
-
-                self.imageView.image = renderedImage
             }
-        }
+        )
 
-        renderWorkItem = workItem
-        renderQueue.asyncAfter(deadline: .now() + 0.03, execute: workItem)
+        previewRenderRequest = request
+        renderQueue.async(execute: request.workItem)
     }
 
     @objc private func exportButtonTapped() {
