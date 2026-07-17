@@ -46,7 +46,6 @@ final class EditorViewController: UIViewController {
         imageView.backgroundColor = .secondarySystemBackground
         imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
-        imageView.layer.cornerRadius = 16
         return imageView
     }()
 
@@ -100,27 +99,103 @@ final class EditorViewController: UIViewController {
         value: 0
     )
 
-    private let controlsScrollView: UIScrollView = {
+    private let controlsContainerView = UIView()
+
+    private let activeSliderContainerView = UIView()
+
+    private let toolsScrollView: UIScrollView = {
         let scrollView = UIScrollView()
-        scrollView.alwaysBounceVertical = true
-        scrollView.showsVerticalScrollIndicator = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         return scrollView
     }()
 
-    private let controlsContentView = UIView()
-
-    private let slidersStackView: UIStackView = {
+    private let toolsStackView: UIStackView = {
         let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.spacing = 22
+        stackView.axis = .horizontal
+        stackView.spacing = 8
         stackView.alignment = .fill
         stackView.distribution = .fill
         return stackView
     }()
 
-    private let resetButton: UIButton = {
+    private var activeSliderView: AdjustmentSliderView?
+    private var selectedToolButton: UIButton?
+
+    private let brightnessToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Brightness"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let contrastToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Contrast"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let saturationToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Saturation"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let exposureToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Exposure"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let blurToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Blur"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let sharpenToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Sharpen"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let vignetteToolButton: UIButton = {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.title = "Vignette"
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        return button
+    }()
+
+    private let resetCurrentButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Reset", for: .normal)
+        button.configuration = .bordered()
+        return button
+    }()
+
+    private let resetAllButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Reset All", for: .normal)
         button.configuration = .bordered()
         return button
     }()
@@ -188,55 +263,75 @@ final class EditorViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(imageView)
-        view.addSubview(controlsScrollView)
+        view.addSubview(controlsContainerView)
         view.addSubview(activityIndicator)
 
-        controlsScrollView.addSubview(controlsContentView)
+        controlsContainerView.addSubview(activeSliderContainerView)
+        controlsContainerView.addSubview(toolsScrollView)
+        controlsContainerView.addSubview(resetAllButton)
+        controlsContainerView.addSubview(resetCurrentButton)
 
-        controlsContentView.addSubview(slidersStackView)
-        controlsContentView.addSubview(resetButton)
+        toolsScrollView.addSubview(toolsStackView)
 
-        slidersStackView.addArrangedSubview(brightnessSliderView)
-        slidersStackView.addArrangedSubview(contrastSliderView)
-        slidersStackView.addArrangedSubview(saturationSliderView)
-        slidersStackView.addArrangedSubview(exposureSliderView)
-        slidersStackView.addArrangedSubview(blurSliderView)
-        slidersStackView.addArrangedSubview(sharpenSliderView)
-        slidersStackView.addArrangedSubview(vignetteSliderView)
+        toolsStackView.addArrangedSubview(brightnessToolButton)
+        toolsStackView.addArrangedSubview(contrastToolButton)
+        toolsStackView.addArrangedSubview(saturationToolButton)
+        toolsStackView.addArrangedSubview(exposureToolButton)
+        toolsStackView.addArrangedSubview(blurToolButton)
+        toolsStackView.addArrangedSubview(sharpenToolButton)
+        toolsStackView.addArrangedSubview(vignetteToolButton)
 
-        imageView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(16)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.height.equalToSuperview().multipliedBy(0.42)
-        }
-
-        controlsScrollView.snp.makeConstraints { make in
-            make.top.equalTo(imageView.snp.bottom).offset(16)
+        controlsContainerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
-        controlsContentView.snp.makeConstraints { make in
-            make.edges.equalTo(controlsScrollView.contentLayoutGuide)
-            make.width.equalTo(controlsScrollView.frameLayoutGuide)
+        imageView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(controlsContainerView.snp.top)
         }
 
-        slidersStackView.snp.makeConstraints { make in
+        activeSliderContainerView.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(16)
             make.leading.trailing.equalToSuperview().inset(24)
+            make.height.equalTo(64)
         }
 
-        resetButton.snp.makeConstraints { make in
-            make.top.equalTo(slidersStackView.snp.bottom).offset(24)
-            make.centerX.equalToSuperview()
+        toolsScrollView.snp.makeConstraints { make in
+            make.top.equalTo(activeSliderContainerView.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(44)
+        }
+
+        toolsStackView.snp.makeConstraints { make in
+            make.edges.equalTo(toolsScrollView.contentLayoutGuide)
+            make.height.equalTo(toolsScrollView.frameLayoutGuide)
+        }
+
+        resetCurrentButton.snp.makeConstraints { make in
+            make.top.equalTo(toolsScrollView.snp.bottom).offset(12)
+            make.trailing.equalTo(controlsContainerView.snp.centerX).offset(-6)
             make.width.equalTo(120)
             make.height.equalTo(44)
-            make.bottom.equalToSuperview().inset(24)
+            make.bottom.equalToSuperview().inset(16)
+        }
+
+        resetAllButton.snp.makeConstraints { make in
+            make.top.equalTo(resetCurrentButton)
+            make.leading.equalTo(controlsContainerView.snp.centerX).offset(6)
+            make.width.equalTo(resetCurrentButton)
+            make.height.equalTo(resetCurrentButton)
         }
 
         activityIndicator.snp.makeConstraints { make in
             make.center.equalToSuperview()
         }
+
+        showAdjustment(
+            brightnessSliderView,
+            selectedButton: brightnessToolButton
+        )
     }
 
     private func setupActions() {
@@ -268,17 +363,193 @@ final class EditorViewController: UIViewController {
             self?.recipe.vignette = value
         }
 
-        resetButton.addTarget(
+        brightnessToolButton.addTarget(
             self,
-            action: #selector(resetButtonTapped),
+            action: #selector(brightnessToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        contrastToolButton.addTarget(
+            self,
+            action: #selector(contrastToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        saturationToolButton.addTarget(
+            self,
+            action: #selector(saturationToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        exposureToolButton.addTarget(
+            self,
+            action: #selector(exposureToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        blurToolButton.addTarget(
+            self,
+            action: #selector(blurToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        sharpenToolButton.addTarget(
+            self,
+            action: #selector(sharpenToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        vignetteToolButton.addTarget(
+            self,
+            action: #selector(vignetteToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        resetCurrentButton.addTarget(
+            self,
+            action: #selector(resetCurrentButtonTapped),
+            for: .touchUpInside
+        )
+
+        resetAllButton.addTarget(
+            self,
+            action: #selector(resetAllButtonTapped),
             for: .touchUpInside
         )
     }
 
-    @objc private func resetButtonTapped() {
+    @objc private func brightnessToolButtonTapped() {
+        showAdjustment(
+            brightnessSliderView,
+            selectedButton: brightnessToolButton
+        )
+    }
+
+    @objc private func contrastToolButtonTapped() {
+        showAdjustment(
+            contrastSliderView,
+            selectedButton: contrastToolButton
+        )
+    }
+
+    @objc private func saturationToolButtonTapped() {
+        showAdjustment(
+            saturationSliderView,
+            selectedButton: saturationToolButton
+        )
+    }
+
+    @objc private func exposureToolButtonTapped() {
+        showAdjustment(
+            exposureSliderView,
+            selectedButton: exposureToolButton
+        )
+    }
+
+    @objc private func blurToolButtonTapped() {
+        showAdjustment(
+            blurSliderView,
+            selectedButton: blurToolButton
+        )
+    }
+
+    @objc private func sharpenToolButtonTapped() {
+        showAdjustment(
+            sharpenSliderView,
+            selectedButton: sharpenToolButton
+        )
+    }
+
+    @objc private func vignetteToolButtonTapped() {
+        showAdjustment(
+            vignetteSliderView,
+            selectedButton: vignetteToolButton
+        )
+    }
+
+    private func showAdjustment(
+        _ sliderView: AdjustmentSliderView,
+        selectedButton: UIButton
+    ) {
+        guard activeSliderView !== sliderView else {
+            return
+        }
+
+        activeSliderView?.removeFromSuperview()
+
+        activeSliderView = sliderView
+        activeSliderContainerView.addSubview(sliderView)
+
+        sliderView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        updateToolButton(
+            self.selectedToolButton,
+            isSelected: false
+        )
+
+        self.selectedToolButton = selectedButton
+
+        updateToolButton(
+            selectedButton,
+            isSelected: true
+        )
+    }
+
+    private func updateToolButton(
+        _ button: UIButton?,
+        isSelected: Bool
+    ) {
+        guard let button else {
+            return
+        }
+
+        let title = button.configuration?.title
+
+        var configuration: UIButton.Configuration
+
+        if isSelected {
+            configuration = .filled()
+        } else {
+            configuration = .gray()
+        }
+
+        configuration.title = title
+        configuration.cornerStyle = .medium
+
+        button.configuration = configuration
+    }
+
+    @objc private func resetAllButtonTapped() {
         let neutralRecipe = EditRecipe.neutral
         updateControls(with: neutralRecipe, animated: true)
         recipe = neutralRecipe
+    }
+
+    @objc private func resetCurrentButtonTapped() {
+        if activeSliderView === brightnessSliderView {
+            brightnessSliderView.setValue(0, animated: true)
+            recipe.brightness = 0
+        } else if activeSliderView === contrastSliderView {
+            contrastSliderView.setValue(1, animated: true)
+            recipe.contrast = 1
+        } else if activeSliderView === saturationSliderView {
+            saturationSliderView.setValue(1, animated: true)
+            recipe.saturation = 1
+        } else if activeSliderView === exposureSliderView {
+            exposureSliderView.setValue(0, animated: true)
+            recipe.exposure = 0
+        } else if activeSliderView === blurSliderView {
+            blurSliderView.setValue(0, animated: true)
+            recipe.blurRadius = 0
+        } else if activeSliderView === sharpenSliderView {
+            sharpenSliderView.setValue(0, animated: true)
+            recipe.sharpen = 0
+        } else if activeSliderView === vignetteSliderView {
+            vignetteSliderView.setValue(0, animated: true)
+            recipe.vignette = 0
+        }
     }
 
     private func updateControls(
@@ -381,8 +652,11 @@ final class EditorViewController: UIViewController {
 
     private func setExporting(_ isExporting: Bool) {
         navigationItem.rightBarButtonItem?.isEnabled = !isExporting
-        resetButton.isEnabled = !isExporting
-        controlsScrollView.isUserInteractionEnabled = !isExporting
+
+        resetCurrentButton.isEnabled = !isExporting
+        resetAllButton.isEnabled = !isExporting
+
+        controlsContainerView.isUserInteractionEnabled = !isExporting
 
         if isExporting {
             activityIndicator.startAnimating()
