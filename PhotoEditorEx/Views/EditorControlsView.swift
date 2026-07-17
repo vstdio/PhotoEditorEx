@@ -73,6 +73,8 @@ final class EditorControlsView: UIView {
         value: 0
     )
 
+    private let toolsContentView = UIView()
+
     private let toolsScrollView: UIScrollView = {
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
@@ -179,7 +181,8 @@ final class EditorControlsView: UIView {
         addSubview(resetCurrentButton)
         addSubview(resetAllButton)
 
-        toolsScrollView.addSubview(toolsStackView)
+        toolsScrollView.addSubview(toolsContentView)
+        toolsContentView.addSubview(toolsStackView)
 
         toolsStackView.addArrangedSubview(brightnessToolButton)
         toolsStackView.addArrangedSubview(contrastToolButton)
@@ -201,9 +204,25 @@ final class EditorControlsView: UIView {
             make.height.equalTo(44)
         }
 
-        toolsStackView.snp.makeConstraints { make in
+        toolsContentView.snp.makeConstraints { make in
             make.edges.equalTo(toolsScrollView.contentLayoutGuide)
             make.height.equalTo(toolsScrollView.frameLayoutGuide)
+
+            make.width.greaterThanOrEqualTo(
+                toolsScrollView.frameLayoutGuide
+            )
+
+            make.width.equalTo(
+                toolsScrollView.frameLayoutGuide
+            ).priority(750)
+        }
+
+        toolsStackView.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.centerX.equalToSuperview()
+
+            make.leading.greaterThanOrEqualToSuperview().offset(16)
+            make.trailing.lessThanOrEqualToSuperview().inset(16)
         }
 
         brightnessToolButton.snp.makeConstraints { make in
