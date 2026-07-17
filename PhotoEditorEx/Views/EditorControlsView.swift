@@ -19,6 +19,8 @@ final class EditorControlsView: UIView {
     var onVignetteChanged: ((Float) -> Void)?
     var onResetAll: (() -> Void)?
 
+    private let activeSliderContainerView = UIView()
+
     private let brightnessSliderView = AdjustmentSliderView(
         title: "Brightness",
         minimumValue: -0.5,
@@ -71,106 +73,63 @@ final class EditorControlsView: UIView {
         value: 0
     )
 
-    private let activeSliderContainerView = UIView()
-
     private let toolsScrollView: UIScrollView = {
         let scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
-        scrollView.contentInset = UIEdgeInsets(
-            top: 0,
-            left: 16,
-            bottom: 0,
-            right: 16
-        )
+        scrollView.alwaysBounceHorizontal = false
         return scrollView
     }()
 
     private let toolsStackView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .horizontal
-        stackView.spacing = 8
+        stackView.spacing = 10
         stackView.alignment = .fill
         stackView.distribution = .fill
         return stackView
     }()
 
-    private let brightnessToolButton: UIButton = {
-        let button = UIButton(type: .system)
+    private let brightnessToolButton = EditorControlsView.makeToolButton(
+        systemName: "sun.max.fill",
+        fallbackSystemName: "sun.max",
+        accessibilityLabel: "Brightness"
+    )
 
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Brightness"
-        configuration.cornerStyle = .medium
+    private let contrastToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.lefthalf.filled",
+        fallbackSystemName: "circle.lefthalf.fill",
+        accessibilityLabel: "Contrast"
+    )
 
-        button.configuration = configuration
-        return button
-    }()
+    private let saturationToolButton = EditorControlsView.makeToolButton(
+        systemName: "paintpalette.fill",
+        fallbackSystemName: "paintpalette",
+        accessibilityLabel: "Saturation"
+    )
 
-    private let contrastToolButton: UIButton = {
-        let button = UIButton(type: .system)
+    private let exposureToolButton = EditorControlsView.makeToolButton(
+        systemName: "plusminus.circle.fill",
+        fallbackSystemName: "plusminus.circle",
+        accessibilityLabel: "Exposure"
+    )
 
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Contrast"
-        configuration.cornerStyle = .medium
+    private let blurToolButton = EditorControlsView.makeToolButton(
+        systemName: "drop.fill",
+        fallbackSystemName: "drop",
+        accessibilityLabel: "Blur"
+    )
 
-        button.configuration = configuration
-        return button
-    }()
+    private let sharpenToolButton = EditorControlsView.makeToolButton(
+        systemName: "scope",
+        fallbackSystemName: "viewfinder",
+        accessibilityLabel: "Sharpen"
+    )
 
-    private let saturationToolButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Saturation"
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
-        return button
-    }()
-
-    private let exposureToolButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Exposure"
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
-        return button
-    }()
-
-    private let blurToolButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Blur"
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
-        return button
-    }()
-
-    private let sharpenToolButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Sharpen"
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
-        return button
-    }()
-
-    private let vignetteToolButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.gray()
-        configuration.title = "Vignette"
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
-        return button
-    }()
+    private let vignetteToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.dashed.inset.filled",
+        fallbackSystemName: "circle.dashed",
+        accessibilityLabel: "Vignette"
+    )
 
     private let resetCurrentButton: UIButton = {
         let button = UIButton(type: .system)
@@ -245,6 +204,34 @@ final class EditorControlsView: UIView {
         toolsStackView.snp.makeConstraints { make in
             make.edges.equalTo(toolsScrollView.contentLayoutGuide)
             make.height.equalTo(toolsScrollView.frameLayoutGuide)
+        }
+
+        brightnessToolButton.snp.makeConstraints { make in
+            make.width.equalTo(44)
+        }
+
+        contrastToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
+        }
+
+        saturationToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
+        }
+
+        exposureToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
+        }
+
+        blurToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
+        }
+
+        sharpenToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
+        }
+
+        vignetteToolButton.snp.makeConstraints { make in
+            make.width.equalTo(brightnessToolButton)
         }
 
         resetCurrentButton.snp.makeConstraints { make in
@@ -381,24 +368,23 @@ final class EditorControlsView: UIView {
         _ button: UIButton?,
         isSelected: Bool
     ) {
-        guard let button else {
-            return
+        guard let button else { return }
+
+        UIView.animate(withDuration: 0.2) {
+            button.tintColor = isSelected
+                ? .systemBlue
+                : .secondaryLabel
+
+            button.backgroundColor = isSelected
+                ? UIColor.systemBlue.withAlphaComponent(0.12)
+                : .clear
         }
-
-        let title = button.configuration?.title
-
-        var configuration: UIButton.Configuration
 
         if isSelected {
-            configuration = .filled()
+            button.accessibilityTraits.insert(.selected)
         } else {
-            configuration = .gray()
+            button.accessibilityTraits.remove(.selected)
         }
-
-        configuration.title = title
-        configuration.cornerStyle = .medium
-
-        button.configuration = configuration
     }
 
     @objc private func brightnessToolButtonTapped() {
@@ -484,5 +470,33 @@ final class EditorControlsView: UIView {
         sharpenSliderView.setValue(0, animated: true)
         vignetteSliderView.setValue(0, animated: true)
         onResetAll?()
+    }
+
+    private static func makeToolButton(
+        systemName: String,
+        fallbackSystemName: String,
+        accessibilityLabel: String
+    ) -> UIButton {
+        let button = UIButton(type: .system)
+
+        let image = UIImage(systemName: systemName)
+            ?? UIImage(systemName: fallbackSystemName)
+
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = image
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(
+            pointSize: 18,
+            weight: .medium
+        )
+        configuration.contentInsets = .zero
+
+        button.configuration = configuration
+        button.tintColor = .secondaryLabel
+        button.layer.cornerRadius = 22
+
+        button.accessibilityLabel = accessibilityLabel
+        button.accessibilityHint = "Selects the \(accessibilityLabel.lowercased()) adjustment"
+
+        return button
     }
 }
