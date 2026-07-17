@@ -41,14 +41,7 @@ final class EditorViewController: UIViewController {
     private var renderedPreviewImage: UIImage?
     private var isShowingOriginal = false
 
-    private let imageView: UIImageView = {
-        let imageView = UIImageView()
-        imageView.backgroundColor = .secondarySystemBackground
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        return imageView
-    }()
-
+    private let editorImageView = EditorImageView()
     private let controlsView = EditorControlsView()
 
     init(image: UIImage) {
@@ -86,21 +79,20 @@ final class EditorViewController: UIViewController {
         setupActions()
         setupBeforeAfterGesture()
 
-        imageView.image = previewImage
+        editorImageView.image = previewImage
     }
 
     private func setupBeforeAfterGesture() {
-        imageView.isUserInteractionEnabled = true
-
         let gestureRecognizer = UILongPressGestureRecognizer(
             target: self,
             action: #selector(handleBeforeAfterGesture)
         )
 
-        gestureRecognizer.minimumPressDuration = 0
+        gestureRecognizer.minimumPressDuration = 0.15
+        gestureRecognizer.allowableMovement = 8
         gestureRecognizer.cancelsTouchesInView = false
 
-        imageView.addGestureRecognizer(gestureRecognizer)
+        editorImageView.addGestureRecognizer(gestureRecognizer)
     }
 
     private func setupNavigationBar() {
@@ -113,7 +105,7 @@ final class EditorViewController: UIViewController {
     }
 
     private func setupLayout() {
-        view.addSubview(imageView)
+        view.addSubview(editorImageView)
         view.addSubview(controlsView)
         view.addSubview(activityIndicator)
 
@@ -122,7 +114,7 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
-        imageView.snp.makeConstraints { make in
+        editorImageView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(controlsView.snp.top)
@@ -173,9 +165,11 @@ final class EditorViewController: UIViewController {
         guard !recipe.isNeutral else {
             previewRenderRequest = nil
             renderedPreviewImage = nil
+
             if !isShowingOriginal {
-                imageView.image = previewImage
+                editorImageView.image = previewImage
             }
+
             return
         }
 
@@ -196,11 +190,9 @@ final class EditorViewController: UIViewController {
                     guard previewRenderRequest?.id == renderID else { return }
                     guard previewRenderRequest?.isCancelled == false else { return }
                     guard let renderedImage else { return }
-
                     renderedPreviewImage = renderedImage
                     guard !isShowingOriginal else { return }
-
-                    imageView.image = renderedImage
+                    editorImageView.image = renderedImage
                 }
             }
         )
@@ -280,11 +272,11 @@ final class EditorViewController: UIViewController {
         switch gestureRecognizer.state {
         case .began:
             isShowingOriginal = true
-            imageView.image = previewImage
+            editorImageView.image = previewImage
 
         case .ended, .cancelled, .failed:
             isShowingOriginal = false
-            imageView.image = renderedPreviewImage ?? previewImage
+            editorImageView.image = renderedPreviewImage ?? previewImage
 
         default:
             break
