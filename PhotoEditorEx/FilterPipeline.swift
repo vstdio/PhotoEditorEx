@@ -47,6 +47,7 @@ final class FilterPipeline {
         var outputImage = inputImage
 
         outputImage = applyExposure(to: outputImage, recipe: recipe)
+        outputImage = applyToneMapping(to: outputImage, recipe: recipe)
         outputImage = applyColorControls(to: outputImage, recipe: recipe)
         outputImage = applyBlur(to: outputImage, recipe: recipe, originalExtent: originalExtent)
         outputImage = applySharpen(to: outputImage, recipe: recipe)
@@ -73,6 +74,45 @@ final class FilterPipeline {
         let filter = CIFilter.exposureAdjust()
         filter.inputImage = image
         filter.ev = recipe.exposure
+
+        return filter.outputImage ?? image
+    }
+
+    private func applyToneMapping(
+        to image: CIImage,
+        recipe: EditRecipe
+    ) -> CIImage {
+        guard recipe.shadows != 0 || recipe.highlights != 0 else {
+            return image
+        }
+
+        let filter = CIFilter.toneCurve()
+        filter.inputImage = image
+
+        filter.point0 = CGPoint(
+            x: 0,
+            y: 0
+        )
+
+        filter.point1 = CGPoint(
+            x: 0.25,
+            y: 0.25 + CGFloat(recipe.shadows) * 0.15
+        )
+
+        filter.point2 = CGPoint(
+            x: 0.5,
+            y: 0.5
+        )
+
+        filter.point3 = CGPoint(
+            x: 0.75,
+            y: 0.75 + CGFloat(recipe.highlights) * 0.15
+        )
+
+        filter.point4 = CGPoint(
+            x: 1,
+            y: 1
+        )
 
         return filter.outputImage ?? image
     }

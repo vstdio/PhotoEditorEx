@@ -14,10 +14,23 @@ final class EditorControlsView: UIView {
     var onContrastChanged: ((Float) -> Void)?
     var onSaturationChanged: ((Float) -> Void)?
     var onExposureChanged: ((Float) -> Void)?
+    var onShadowsChanged: ((Float) -> Void)?
+    var onHighlightsChanged: ((Float) -> Void)?
     var onBlurChanged: ((Float) -> Void)?
     var onSharpenChanged: ((Float) -> Void)?
     var onVignetteChanged: ((Float) -> Void)?
     var onResetAll: (() -> Void)?
+
+    private let categorySegmentedControl: UISegmentedControl = {
+        let control = UISegmentedControl(
+            items: [
+                "Tone",
+                "Effects"
+            ]
+        )
+        control.selectedSegmentIndex = 0
+        return control
+    }()
 
     private let activeSliderContainerView = UIView()
 
@@ -47,6 +60,26 @@ final class EditorControlsView: UIView {
         minimumValue: -2,
         maximumValue: 2,
         value: 0
+    )
+
+    private let shadowsSliderView = AdjustmentSliderView(
+        title: "Shadows",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
+    )
+
+    private let highlightsSliderView = AdjustmentSliderView(
+        title: "Highlights",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
     )
 
     private let blurSliderView = AdjustmentSliderView(
@@ -133,6 +166,18 @@ final class EditorControlsView: UIView {
         accessibilityLabel: "Vignette"
     )
 
+    private let shadowsToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.bottomhalf.filled",
+        fallbackSystemName: "circle.lefthalf.filled",
+        accessibilityLabel: "Shadows"
+    )
+
+    private let highlightsToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.tophalf.filled",
+        fallbackSystemName: "sun.max.fill",
+        accessibilityLabel: "Highlights"
+    )
+
     private let resetCurrentButton: UIButton = {
         let button = UIButton(type: .system)
 
@@ -164,10 +209,7 @@ final class EditorControlsView: UIView {
         setupLayout()
         setupActions()
 
-        showAdjustment(
-            brightnessSliderView,
-            selectedButton: brightnessToolButton
-        )
+        showToneCategory()
     }
 
     @available(*, unavailable)
@@ -177,6 +219,7 @@ final class EditorControlsView: UIView {
 
     private func setupLayout() {
         addSubview(activeSliderContainerView)
+        addSubview(categorySegmentedControl)
         addSubview(toolsScrollView)
         addSubview(resetCurrentButton)
         addSubview(resetAllButton)
@@ -184,22 +227,21 @@ final class EditorControlsView: UIView {
         toolsScrollView.addSubview(toolsContentView)
         toolsContentView.addSubview(toolsStackView)
 
-        toolsStackView.addArrangedSubview(brightnessToolButton)
-        toolsStackView.addArrangedSubview(contrastToolButton)
-        toolsStackView.addArrangedSubview(saturationToolButton)
-        toolsStackView.addArrangedSubview(exposureToolButton)
-        toolsStackView.addArrangedSubview(blurToolButton)
-        toolsStackView.addArrangedSubview(sharpenToolButton)
-        toolsStackView.addArrangedSubview(vignetteToolButton)
-
         activeSliderContainerView.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(16)
             make.leading.trailing.equalToSuperview().inset(24)
             make.height.equalTo(64)
         }
 
+        categorySegmentedControl.snp.makeConstraints { make in
+            make.top.equalTo(activeSliderContainerView.snp.bottom).offset(12)
+            make.centerX.equalToSuperview()
+            make.width.equalTo(220)
+            make.height.equalTo(32)
+        }
+
         toolsScrollView.snp.makeConstraints { make in
-            make.top.equalTo(activeSliderContainerView.snp.bottom).offset(16)
+            make.top.equalTo(categorySegmentedControl.snp.bottom).offset(12)
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(44)
         }
@@ -223,34 +265,6 @@ final class EditorControlsView: UIView {
 
             make.leading.greaterThanOrEqualToSuperview().offset(16)
             make.trailing.lessThanOrEqualToSuperview().inset(16)
-        }
-
-        brightnessToolButton.snp.makeConstraints { make in
-            make.width.equalTo(44)
-        }
-
-        contrastToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
-        }
-
-        saturationToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
-        }
-
-        exposureToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
-        }
-
-        blurToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
-        }
-
-        sharpenToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
-        }
-
-        vignetteToolButton.snp.makeConstraints { make in
-            make.width.equalTo(brightnessToolButton)
         }
 
         resetCurrentButton.snp.makeConstraints { make in
@@ -298,6 +312,14 @@ final class EditorControlsView: UIView {
             self?.onVignetteChanged?(value)
         }
 
+        shadowsSliderView.onValueChanged = { [weak self] value in
+            self?.onShadowsChanged?(value)
+        }
+
+        highlightsSliderView.onValueChanged = { [weak self] value in
+            self?.onHighlightsChanged?(value)
+        }
+
         brightnessToolButton.addTarget(
             self,
             action: #selector(brightnessToolButtonTapped),
@@ -320,6 +342,24 @@ final class EditorControlsView: UIView {
             self,
             action: #selector(exposureToolButtonTapped),
             for: .touchUpInside
+        )
+
+        shadowsToolButton.addTarget(
+            self,
+            action: #selector(shadowsToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        highlightsToolButton.addTarget(
+            self,
+            action: #selector(highlightsToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        categorySegmentedControl.addTarget(
+            self,
+            action: #selector(categoryChanged),
+            for: .valueChanged
         )
 
         blurToolButton.addTarget(
@@ -351,6 +391,50 @@ final class EditorControlsView: UIView {
             action: #selector(resetAllButtonTapped),
             for: .touchUpInside
         )
+    }
+
+    @objc private func categoryChanged() {
+        if categorySegmentedControl.selectedSegmentIndex == 0 {
+            showToneCategory()
+        } else {
+            showEffectsCategory()
+        }
+    }
+
+    private func showToneCategory() {
+        removeToolButtons()
+
+        toolsStackView.addArrangedSubview(exposureToolButton)
+        toolsStackView.addArrangedSubview(brightnessToolButton)
+        toolsStackView.addArrangedSubview(contrastToolButton)
+        toolsStackView.addArrangedSubview(shadowsToolButton)
+        toolsStackView.addArrangedSubview(highlightsToolButton)
+
+        showAdjustment(
+            exposureSliderView,
+            selectedButton: exposureToolButton
+        )
+    }
+
+    private func showEffectsCategory() {
+        removeToolButtons()
+
+        toolsStackView.addArrangedSubview(saturationToolButton)
+        toolsStackView.addArrangedSubview(sharpenToolButton)
+        toolsStackView.addArrangedSubview(blurToolButton)
+        toolsStackView.addArrangedSubview(vignetteToolButton)
+
+        showAdjustment(
+            saturationSliderView,
+            selectedButton: saturationToolButton
+        )
+    }
+
+    private func removeToolButtons() {
+        toolsStackView.arrangedSubviews.forEach { view in
+            toolsStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
     }
 
     private func showAdjustment(
@@ -404,6 +488,20 @@ final class EditorControlsView: UIView {
         } else {
             button.accessibilityTraits.remove(.selected)
         }
+    }
+
+    @objc private func shadowsToolButtonTapped() {
+        showAdjustment(
+            shadowsSliderView,
+            selectedButton: shadowsToolButton
+        )
+    }
+
+    @objc private func highlightsToolButtonTapped() {
+        showAdjustment(
+            highlightsSliderView,
+            selectedButton: highlightsToolButton
+        )
     }
 
     @objc private func brightnessToolButtonTapped() {
@@ -477,6 +575,12 @@ final class EditorControlsView: UIView {
         } else if activeSliderView === vignetteSliderView {
             vignetteSliderView.setValue(0, animated: true)
             onVignetteChanged?(0)
+        } else if activeSliderView === shadowsSliderView {
+            shadowsSliderView.setValue(0, animated: true)
+            onShadowsChanged?(0)
+        } else if activeSliderView === highlightsSliderView {
+            highlightsSliderView.setValue(0, animated: true)
+            onHighlightsChanged?(0)
         }
     }
 
@@ -485,6 +589,8 @@ final class EditorControlsView: UIView {
         contrastSliderView.setValue(1, animated: true)
         saturationSliderView.setValue(1, animated: true)
         exposureSliderView.setValue(0, animated: true)
+        shadowsSliderView.setValue(0, animated: true)
+        highlightsSliderView.setValue(0, animated: true)
         blurSliderView.setValue(0, animated: true)
         sharpenSliderView.setValue(0, animated: true)
         vignetteSliderView.setValue(0, animated: true)
@@ -515,6 +621,10 @@ final class EditorControlsView: UIView {
 
         button.accessibilityLabel = accessibilityLabel
         button.accessibilityHint = "Selects the \(accessibilityLabel.lowercased()) adjustment"
+
+        button.snp.makeConstraints { make in
+            make.width.height.equalTo(44)
+        }
 
         return button
     }

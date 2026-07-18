@@ -142,6 +142,14 @@ final class EditorViewController: UIViewController {
             self?.recipe.exposure = value
         }
 
+        controlsView.onShadowsChanged = { [weak self] value in
+            self?.recipe.shadows = value
+        }
+
+        controlsView.onHighlightsChanged = { [weak self] value in
+            self?.recipe.highlights = value
+        }
+
         controlsView.onBlurChanged = { [weak self] value in
             self?.recipe.blurRadius = value
         }
