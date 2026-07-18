@@ -16,7 +16,19 @@ final class EditorViewController: UIViewController {
     private let previewCIImage: CIImage
 
     private let filterPipeline = FilterPipeline()
-    private let renderQueue = DispatchQueue(label: "PhotoLab.editor.render", qos: .userInitiated)
+    private let renderQueue = DispatchQueue(
+        label: "PhotoLab.editor.render",
+        qos: .userInitiated
+    )
+
+    private let autoAdjustmentService = AutoAdjustmentService()
+    private let autoQueue = DispatchQueue(
+        label: "PhotoLab.editor.auto",
+        qos: .userInitiated
+    )
+
+    private var autoRequestID: UUID?
+    private var recipeBeforeAuto: EditRecipe?
 
     private var previewRenderRequest: PreviewRenderRequest?
 
@@ -182,9 +194,80 @@ final class EditorViewController: UIViewController {
             self?.recipe.vignette = value
         }
 
-        controlsView.onResetAll = { [weak self] in
-            self?.recipe = .neutral
+        controlsView.onAutoChanged = { [weak self] isEnabled in
+            self?.setAutoEnabled(isEnabled)
         }
+
+        controlsView.onResetAll = { [weak self] in
+            guard let self else { return }
+
+            autoRequestID = nil
+            recipeBeforeAuto = nil
+
+            controlsView.setAutoEnabled(false)
+            recipe = .neutral
+        }
+    }
+
+    private func setAutoEnabled(_ isEnabled: Bool) {
+        if isEnabled {
+            applyAutoAdjustments()
+        } else {
+            restoreRecipeBeforeAuto()
+        }
+    }
+
+    private func applyAutoAdjustments() {
+        guard recipeBeforeAuto == nil else {
+            return
+        }
+
+        let baseRecipe = recipe
+        let inputImage = previewCIImage
+        let service = autoAdjustmentService
+
+        recipeBeforeAuto = baseRecipe
+
+        let requestID = UUID()
+        autoRequestID = requestID
+
+        autoQueue.async { [weak self] in
+            let autoRecipe = service.makeRecipe(
+                for: inputImage,
+                baseRecipe: baseRecipe
+            )
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard autoRequestID == requestID else { return }
+
+                autoRequestID = nil
+
+                controlsView.setRecipe(
+                    autoRecipe,
+                    animated: true
+                )
+
+                recipe = autoRecipe
+            }
+        }
+    }
+
+    private func restoreRecipeBeforeAuto() {
+        autoRequestID = nil
+
+        guard let previousRecipe = recipeBeforeAuto else {
+            return
+        }
+
+        recipeBeforeAuto = nil
+
+        controlsView.setRecipe(
+            previousRecipe,
+            animated: true
+        )
+
+        recipe = previousRecipe
     }
 
     private func scheduleRenderPreview() {

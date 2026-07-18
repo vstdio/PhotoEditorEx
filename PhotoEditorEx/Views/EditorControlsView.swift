@@ -24,6 +24,7 @@ final class EditorControlsView: UIView {
     var onBlurChanged: ((Float) -> Void)?
     var onSharpenChanged: ((Float) -> Void)?
     var onVignetteChanged: ((Float) -> Void)?
+    var onAutoChanged: ((Bool) -> Void)?
     var onResetAll: (() -> Void)?
 
     private let categorySegmentedControl: UISegmentedControl = {
@@ -267,6 +268,15 @@ final class EditorControlsView: UIView {
         accessibilityLabel: "Vignette"
     )
 
+    private let autoButton: UIButton = {
+        let button = UIButton(type: .system)
+
+        button.accessibilityLabel = "Auto"
+        button.accessibilityHint = "Toggles automatic image adjustments"
+
+        return button
+    }()
+
     private let resetCurrentButton: UIButton = {
         let button = UIButton(type: .system)
 
@@ -295,6 +305,7 @@ final class EditorControlsView: UIView {
 
         backgroundColor = .systemBackground
 
+        updateAutoButtonAppearance()
         setupLayout()
         setupActions()
 
@@ -306,10 +317,118 @@ final class EditorControlsView: UIView {
         fatalError("init(coder:) is not supported")
     }
 
+    func setRecipe(
+        _ recipe: EditRecipe,
+        animated: Bool
+    ) {
+        brightnessSliderView.setValue(
+            recipe.brightness,
+            animated: animated
+        )
+
+        contrastSliderView.setValue(
+            recipe.contrast,
+            animated: animated
+        )
+
+        exposureSliderView.setValue(
+            recipe.exposure,
+            animated: animated
+        )
+
+        shadowsSliderView.setValue(
+            recipe.shadows,
+            animated: animated
+        )
+
+        highlightsSliderView.setValue(
+            recipe.highlights,
+            animated: animated
+        )
+
+        whitesSliderView.setValue(
+            recipe.whites,
+            animated: animated
+        )
+
+        blacksSliderView.setValue(
+            recipe.blacks,
+            animated: animated
+        )
+
+        temperatureSliderView.setValue(
+            recipe.temperature,
+            animated: animated
+        )
+
+        tintSliderView.setValue(
+            recipe.tint,
+            animated: animated
+        )
+
+        vibranceSliderView.setValue(
+            recipe.vibrance,
+            animated: animated
+        )
+
+        saturationSliderView.setValue(
+            recipe.saturation,
+            animated: animated
+        )
+
+        sharpenSliderView.setValue(
+            recipe.sharpen,
+            animated: animated
+        )
+
+        blurSliderView.setValue(
+            recipe.blurRadius,
+            animated: animated
+        )
+
+        vignetteSliderView.setValue(
+            recipe.vignette,
+            animated: animated
+        )
+    }
+
+    func setAutoEnabled(_ isEnabled: Bool) {
+        autoButton.isSelected = isEnabled
+        updateAutoButtonAppearance()
+    }
+
+    private func updateAutoButtonAppearance() {
+        var configuration: UIButton.Configuration
+
+        if autoButton.isSelected {
+            configuration = .borderedProminent()
+        } else {
+            configuration = .bordered()
+        }
+
+        configuration.title = "Auto"
+        configuration.image = UIImage(
+            systemName: "wand.and.stars"
+        )
+        configuration.imagePadding = 6
+
+        autoButton.configuration = configuration
+        autoButton.accessibilityValue = autoButton.isSelected
+            ? "On"
+            : "Off"
+
+        if autoButton.isSelected {
+            autoButton.accessibilityTraits.insert(.selected)
+        } else {
+            autoButton.accessibilityTraits.remove(.selected)
+        }
+    }
+
     private func setupLayout() {
         addSubview(activeSliderContainerView)
         addSubview(categorySegmentedControl)
         addSubview(toolsScrollView)
+        addSubview(autoButton)
         addSubview(resetCurrentButton)
         addSubview(resetAllButton)
 
@@ -356,19 +475,24 @@ final class EditorControlsView: UIView {
             make.trailing.lessThanOrEqualToSuperview().inset(16)
         }
 
-        resetCurrentButton.snp.makeConstraints { make in
+        autoButton.snp.makeConstraints { make in
             make.top.equalTo(toolsScrollView.snp.bottom).offset(12)
-            make.trailing.equalTo(snp.centerX).offset(-6)
-            make.width.equalTo(120)
+            make.leading.equalToSuperview().offset(16)
             make.height.equalTo(44)
             make.bottom.equalToSuperview().inset(16)
         }
 
+        resetCurrentButton.snp.makeConstraints { make in
+            make.top.height.equalTo(autoButton)
+            make.leading.equalTo(autoButton.snp.trailing).offset(8)
+            make.width.equalTo(autoButton)
+        }
+
         resetAllButton.snp.makeConstraints { make in
-            make.top.equalTo(resetCurrentButton)
-            make.leading.equalTo(snp.centerX).offset(6)
-            make.width.equalTo(resetCurrentButton)
-            make.height.equalTo(resetCurrentButton)
+            make.top.height.equalTo(autoButton)
+            make.leading.equalTo(resetCurrentButton.snp.trailing).offset(8)
+            make.trailing.equalToSuperview().inset(16)
+            make.width.equalTo(autoButton)
         }
     }
 
@@ -516,6 +640,12 @@ final class EditorControlsView: UIView {
         vignetteToolButton.addTarget(
             self,
             action: #selector(vignetteToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        autoButton.addTarget(
+            self,
+            action: #selector(autoButtonTapped),
             for: .touchUpInside
         )
 
@@ -748,6 +878,12 @@ final class EditorControlsView: UIView {
             vignetteSliderView,
             selectedButton: vignetteToolButton
         )
+    }
+
+    @objc private func autoButtonTapped() {
+        let isEnabled = !autoButton.isSelected
+        setAutoEnabled(isEnabled)
+        onAutoChanged?(isEnabled)
     }
 
     @objc private func resetCurrentButtonTapped() {
