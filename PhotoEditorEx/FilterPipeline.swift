@@ -46,10 +46,12 @@ final class FilterPipeline {
 
         var outputImage = inputImage
 
+        outputImage = applyWhiteBalance(to: outputImage, recipe: recipe)
         outputImage = applyExposure(to: outputImage, recipe: recipe)
         outputImage = applyToneMapping(to: outputImage, recipe: recipe)
         outputImage = applyWhiteAndBlackPoints(to: outputImage, recipe: recipe)
         outputImage = applyColorControls(to: outputImage, recipe: recipe)
+        outputImage = applyVibrance(to: outputImage, recipe: recipe)
         outputImage = applyBlur(to: outputImage, recipe: recipe, originalExtent: originalExtent)
         outputImage = applySharpen(to: outputImage, recipe: recipe)
         outputImage = applyVignette(to: outputImage, recipe: recipe)
@@ -65,6 +67,45 @@ final class FilterPipeline {
             scale: scale,
             orientation: .up
         )
+    }
+
+    private func applyWhiteBalance(
+        to image: CIImage,
+        recipe: EditRecipe
+    ) -> CIImage {
+        guard recipe.temperature != 0 || recipe.tint != 0 else {
+            return image
+        }
+
+        let filter = CIFilter.temperatureAndTint()
+        filter.inputImage = image
+
+        filter.neutral = CIVector(
+            x: 6500,
+            y: 0
+        )
+
+        filter.targetNeutral = CIVector(
+            x: 6500 - CGFloat(recipe.temperature) * 2500,
+            y: CGFloat(recipe.tint) * 100
+        )
+
+        return filter.outputImage ?? image
+    }
+
+    private func applyVibrance(
+        to image: CIImage,
+        recipe: EditRecipe
+    ) -> CIImage {
+        guard recipe.vibrance != 0 else {
+            return image
+        }
+
+        let filter = CIFilter.vibrance()
+        filter.inputImage = image
+        filter.amount = recipe.vibrance
+
+        return filter.outputImage ?? image
     }
 
     private func applyExposure(to image: CIImage, recipe: EditRecipe) -> CIImage {

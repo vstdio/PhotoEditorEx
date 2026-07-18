@@ -18,6 +18,9 @@ final class EditorControlsView: UIView {
     var onHighlightsChanged: ((Float) -> Void)?
     var onWhitesChanged: ((Float) -> Void)?
     var onBlacksChanged: ((Float) -> Void)?
+    var onTemperatureChanged: ((Float) -> Void)?
+    var onTintChanged: ((Float) -> Void)?
+    var onVibranceChanged: ((Float) -> Void)?
     var onBlurChanged: ((Float) -> Void)?
     var onSharpenChanged: ((Float) -> Void)?
     var onVignetteChanged: ((Float) -> Void)?
@@ -27,6 +30,7 @@ final class EditorControlsView: UIView {
         let control = UISegmentedControl(
             items: [
                 "Tone",
+                "Color",
                 "Effects"
             ]
         )
@@ -54,7 +58,40 @@ final class EditorControlsView: UIView {
         title: "Saturation",
         minimumValue: 0,
         maximumValue: 2,
-        value: 1
+        value: 1,
+        valueFormatter: {
+            String(format: "%.0f", ($0 - 1) * 100)
+        }
+    )
+
+    private let temperatureSliderView = AdjustmentSliderView(
+        title: "Temperature",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
+    )
+
+    private let tintSliderView = AdjustmentSliderView(
+        title: "Tint",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
+    )
+
+    private let vibranceSliderView = AdjustmentSliderView(
+        title: "Vibrance",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
     )
 
     private let exposureSliderView = AdjustmentSliderView(
@@ -164,6 +201,24 @@ final class EditorControlsView: UIView {
         accessibilityLabel: "Saturation"
     )
 
+    private let temperatureToolButton = EditorControlsView.makeToolButton(
+        systemName: "thermometer.medium",
+        fallbackSystemName: "thermometer",
+        accessibilityLabel: "Temperature"
+    )
+
+    private let tintToolButton = EditorControlsView.makeToolButton(
+        systemName: "eyedropper.halffull",
+        fallbackSystemName: "eyedropper",
+        accessibilityLabel: "Tint"
+    )
+
+    private let vibranceToolButton = EditorControlsView.makeToolButton(
+        systemName: "sparkles",
+        fallbackSystemName: "wand.and.stars",
+        accessibilityLabel: "Vibrance"
+    )
+
     private let exposureToolButton = EditorControlsView.makeToolButton(
         systemName: "plusminus.circle.fill",
         fallbackSystemName: "plusminus.circle",
@@ -270,7 +325,7 @@ final class EditorControlsView: UIView {
         categorySegmentedControl.snp.makeConstraints { make in
             make.top.equalTo(activeSliderContainerView.snp.bottom).offset(12)
             make.centerX.equalToSuperview()
-            make.width.equalTo(220)
+            make.width.equalTo(280)
             make.height.equalTo(32)
         }
 
@@ -330,6 +385,18 @@ final class EditorControlsView: UIView {
             self?.onSaturationChanged?(value)
         }
 
+        temperatureSliderView.onValueChanged = { [weak self] value in
+            self?.onTemperatureChanged?(value)
+        }
+
+        tintSliderView.onValueChanged = { [weak self] value in
+            self?.onTintChanged?(value)
+        }
+
+        vibranceSliderView.onValueChanged = { [weak self] value in
+            self?.onVibranceChanged?(value)
+        }
+
         exposureSliderView.onValueChanged = { [weak self] value in
             self?.onExposureChanged?(value)
         }
@@ -377,6 +444,24 @@ final class EditorControlsView: UIView {
         saturationToolButton.addTarget(
             self,
             action: #selector(saturationToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        temperatureToolButton.addTarget(
+            self,
+            action: #selector(temperatureToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        tintToolButton.addTarget(
+            self,
+            action: #selector(tintToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        vibranceToolButton.addTarget(
+            self,
+            action: #selector(vibranceToolButtonTapped),
             for: .touchUpInside
         )
 
@@ -448,10 +533,18 @@ final class EditorControlsView: UIView {
     }
 
     @objc private func categoryChanged() {
-        if categorySegmentedControl.selectedSegmentIndex == 0 {
+        switch categorySegmentedControl.selectedSegmentIndex {
+        case 0:
             showToneCategory()
-        } else {
+
+        case 1:
+            showColorCategory()
+
+        case 2:
             showEffectsCategory()
+
+        default:
+            break
         }
     }
 
@@ -472,17 +565,30 @@ final class EditorControlsView: UIView {
         )
     }
 
+    private func showColorCategory() {
+        removeToolButtons()
+
+        toolsStackView.addArrangedSubview(temperatureToolButton)
+        toolsStackView.addArrangedSubview(tintToolButton)
+        toolsStackView.addArrangedSubview(vibranceToolButton)
+        toolsStackView.addArrangedSubview(saturationToolButton)
+
+        showAdjustment(
+            temperatureSliderView,
+            selectedButton: temperatureToolButton
+        )
+    }
+
     private func showEffectsCategory() {
         removeToolButtons()
 
-        toolsStackView.addArrangedSubview(saturationToolButton)
         toolsStackView.addArrangedSubview(sharpenToolButton)
         toolsStackView.addArrangedSubview(blurToolButton)
         toolsStackView.addArrangedSubview(vignetteToolButton)
 
         showAdjustment(
-            saturationSliderView,
-            selectedButton: saturationToolButton
+            sharpenSliderView,
+            selectedButton: sharpenToolButton
         )
     }
 
@@ -595,6 +701,27 @@ final class EditorControlsView: UIView {
         )
     }
 
+    @objc private func temperatureToolButtonTapped() {
+        showAdjustment(
+            temperatureSliderView,
+            selectedButton: temperatureToolButton
+        )
+    }
+
+    @objc private func tintToolButtonTapped() {
+        showAdjustment(
+            tintSliderView,
+            selectedButton: tintToolButton
+        )
+    }
+
+    @objc private func vibranceToolButtonTapped() {
+        showAdjustment(
+            vibranceSliderView,
+            selectedButton: vibranceToolButton
+        )
+    }
+
     @objc private func exposureToolButtonTapped() {
         showAdjustment(
             exposureSliderView,
@@ -657,6 +784,15 @@ final class EditorControlsView: UIView {
         } else if activeSliderView === blacksSliderView {
             blacksSliderView.setValue(0, animated: true)
             onBlacksChanged?(0)
+        } else if activeSliderView === temperatureSliderView {
+            temperatureSliderView.setValue(0, animated: true)
+            onTemperatureChanged?(0)
+        } else if activeSliderView === tintSliderView {
+            tintSliderView.setValue(0, animated: true)
+            onTintChanged?(0)
+        } else if activeSliderView === vibranceSliderView {
+            vibranceSliderView.setValue(0, animated: true)
+            onVibranceChanged?(0)
         }
     }
 
@@ -664,6 +800,9 @@ final class EditorControlsView: UIView {
         brightnessSliderView.setValue(0, animated: true)
         contrastSliderView.setValue(1, animated: true)
         saturationSliderView.setValue(1, animated: true)
+        temperatureSliderView.setValue(0, animated: true)
+        tintSliderView.setValue(0, animated: true)
+        vibranceSliderView.setValue(0, animated: true)
         exposureSliderView.setValue(0, animated: true)
         shadowsSliderView.setValue(0, animated: true)
         highlightsSliderView.setValue(0, animated: true)

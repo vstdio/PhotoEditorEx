@@ -138,6 +138,18 @@ final class EditorViewController: UIViewController {
             self?.recipe.saturation = value
         }
 
+        controlsView.onTemperatureChanged = { [weak self] value in
+            self?.recipe.temperature = value
+        }
+
+        controlsView.onTintChanged = { [weak self] value in
+            self?.recipe.tint = value
+        }
+
+        controlsView.onVibranceChanged = { [weak self] value in
+            self?.recipe.vibrance = value
+        }
+
         controlsView.onExposureChanged = { [weak self] value in
             self?.recipe.exposure = value
         }
