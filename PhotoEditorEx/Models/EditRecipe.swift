@@ -18,6 +18,8 @@ struct EditRecipe: Equatable {
 
     var shadows: Float = 0
     var highlights: Float = 0
+    var whites: Float = 0
+    var blacks: Float = 0
 
     var blurRadius: Float = 0
     var sharpen: Float = 0

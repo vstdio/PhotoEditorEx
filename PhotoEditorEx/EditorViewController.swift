@@ -150,6 +150,14 @@ final class EditorViewController: UIViewController {
             self?.recipe.highlights = value
         }
 
+        controlsView.onWhitesChanged = { [weak self] value in
+            self?.recipe.whites = value
+        }
+
+        controlsView.onBlacksChanged = { [weak self] value in
+            self?.recipe.blacks = value
+        }
+
         controlsView.onBlurChanged = { [weak self] value in
             self?.recipe.blurRadius = value
         }

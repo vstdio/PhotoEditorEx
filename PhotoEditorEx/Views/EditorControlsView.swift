@@ -16,6 +16,8 @@ final class EditorControlsView: UIView {
     var onExposureChanged: ((Float) -> Void)?
     var onShadowsChanged: ((Float) -> Void)?
     var onHighlightsChanged: ((Float) -> Void)?
+    var onWhitesChanged: ((Float) -> Void)?
+    var onBlacksChanged: ((Float) -> Void)?
     var onBlurChanged: ((Float) -> Void)?
     var onSharpenChanged: ((Float) -> Void)?
     var onVignetteChanged: ((Float) -> Void)?
@@ -74,6 +76,26 @@ final class EditorControlsView: UIView {
 
     private let highlightsSliderView = AdjustmentSliderView(
         title: "Highlights",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
+    )
+
+    private let whitesSliderView = AdjustmentSliderView(
+        title: "Whites",
+        minimumValue: -1,
+        maximumValue: 1,
+        value: 0,
+        valueFormatter: {
+            String(format: "%.0f", $0 * 100)
+        }
+    )
+
+    private let blacksSliderView = AdjustmentSliderView(
+        title: "Blacks",
         minimumValue: -1,
         maximumValue: 1,
         value: 0,
@@ -148,6 +170,30 @@ final class EditorControlsView: UIView {
         accessibilityLabel: "Exposure"
     )
 
+    private let shadowsToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.bottomhalf.filled",
+        fallbackSystemName: "circle.lefthalf.filled",
+        accessibilityLabel: "Shadows"
+    )
+
+    private let highlightsToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.tophalf.filled",
+        fallbackSystemName: "sun.max.fill",
+        accessibilityLabel: "Highlights"
+    )
+
+    private let whitesToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle",
+        fallbackSystemName: "circle.fill",
+        accessibilityLabel: "Whites"
+    )
+
+    private let blacksToolButton = EditorControlsView.makeToolButton(
+        systemName: "circle.fill",
+        fallbackSystemName: "circle",
+        accessibilityLabel: "Blacks"
+    )
+
     private let blurToolButton = EditorControlsView.makeToolButton(
         systemName: "drop.fill",
         fallbackSystemName: "drop",
@@ -164,18 +210,6 @@ final class EditorControlsView: UIView {
         systemName: "circle.dashed.inset.filled",
         fallbackSystemName: "circle.dashed",
         accessibilityLabel: "Vignette"
-    )
-
-    private let shadowsToolButton = EditorControlsView.makeToolButton(
-        systemName: "circle.bottomhalf.filled",
-        fallbackSystemName: "circle.lefthalf.filled",
-        accessibilityLabel: "Shadows"
-    )
-
-    private let highlightsToolButton = EditorControlsView.makeToolButton(
-        systemName: "circle.tophalf.filled",
-        fallbackSystemName: "sun.max.fill",
-        accessibilityLabel: "Highlights"
     )
 
     private let resetCurrentButton: UIButton = {
@@ -320,6 +354,14 @@ final class EditorControlsView: UIView {
             self?.onHighlightsChanged?(value)
         }
 
+        whitesSliderView.onValueChanged = { [weak self] value in
+            self?.onWhitesChanged?(value)
+        }
+
+        blacksSliderView.onValueChanged = { [weak self] value in
+            self?.onBlacksChanged?(value)
+        }
+
         brightnessToolButton.addTarget(
             self,
             action: #selector(brightnessToolButtonTapped),
@@ -353,6 +395,18 @@ final class EditorControlsView: UIView {
         highlightsToolButton.addTarget(
             self,
             action: #selector(highlightsToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        whitesToolButton.addTarget(
+            self,
+            action: #selector(whitesToolButtonTapped),
+            for: .touchUpInside
+        )
+
+        blacksToolButton.addTarget(
+            self,
+            action: #selector(blacksToolButtonTapped),
             for: .touchUpInside
         )
 
@@ -409,6 +463,8 @@ final class EditorControlsView: UIView {
         toolsStackView.addArrangedSubview(contrastToolButton)
         toolsStackView.addArrangedSubview(shadowsToolButton)
         toolsStackView.addArrangedSubview(highlightsToolButton)
+        toolsStackView.addArrangedSubview(whitesToolButton)
+        toolsStackView.addArrangedSubview(blacksToolButton)
 
         showAdjustment(
             exposureSliderView,
@@ -504,6 +560,20 @@ final class EditorControlsView: UIView {
         )
     }
 
+    @objc private func whitesToolButtonTapped() {
+        showAdjustment(
+            whitesSliderView,
+            selectedButton: whitesToolButton
+        )
+    }
+
+    @objc private func blacksToolButtonTapped() {
+        showAdjustment(
+            blacksSliderView,
+            selectedButton: blacksToolButton
+        )
+    }
+
     @objc private func brightnessToolButtonTapped() {
         showAdjustment(
             brightnessSliderView,
@@ -581,6 +651,12 @@ final class EditorControlsView: UIView {
         } else if activeSliderView === highlightsSliderView {
             highlightsSliderView.setValue(0, animated: true)
             onHighlightsChanged?(0)
+        } else if activeSliderView === whitesSliderView {
+            whitesSliderView.setValue(0, animated: true)
+            onWhitesChanged?(0)
+        } else if activeSliderView === blacksSliderView {
+            blacksSliderView.setValue(0, animated: true)
+            onBlacksChanged?(0)
         }
     }
 
@@ -591,6 +667,8 @@ final class EditorControlsView: UIView {
         exposureSliderView.setValue(0, animated: true)
         shadowsSliderView.setValue(0, animated: true)
         highlightsSliderView.setValue(0, animated: true)
+        whitesSliderView.setValue(0, animated: true)
+        blacksSliderView.setValue(0, animated: true)
         blurSliderView.setValue(0, animated: true)
         sharpenSliderView.setValue(0, animated: true)
         vignetteSliderView.setValue(0, animated: true)
