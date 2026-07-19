@@ -106,61 +106,44 @@ extension CatalogViewController: PHPickerViewControllerDelegate {
         didFinishPicking results: [PHPickerResult]
     ) {
         picker.dismiss(animated: true)
-
-        guard !results.isEmpty else {
-            return
-        }
+        guard !results.isEmpty else { return }
 
         setImporting(true)
 
-        loadImages(
-            from: results,
-            currentIndex: 0,
-            loadedImages: []
-        )
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let images = await loadImages(from: results)
+            finishImport(images: images)
+        }
     }
 
     private func loadImages(
-        from results: [PHPickerResult],
-        currentIndex: Int,
-        loadedImages: [UIImage]
-    ) {
-        guard currentIndex < results.count else {
-            DispatchQueue.main.async { [weak self] in
-                self?.finishImport(images: loadedImages)
-            }
+        from results: [PHPickerResult]
+    ) async -> [UIImage] {
+        var images: [UIImage] = []
 
-            return
+        for result in results {
+            let provider = result.itemProvider
+            guard let image = await loadImage(from: provider) else { continue }
+            images.append(image)
         }
 
-        let provider = results[currentIndex].itemProvider
+        return images
+    }
 
+    private func loadImage(
+        from provider: NSItemProvider
+    ) async -> UIImage? {
         guard provider.canLoadObject(ofClass: UIImage.self) else {
-            loadImages(
-                from: results,
-                currentIndex: currentIndex + 1,
-                loadedImages: loadedImages
-            )
-
-            return
+            return nil
         }
 
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self else {
-                return
+        return await withCheckedContinuation { continuation in
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                continuation.resume(
+                    returning: object as? UIImage
+                )
             }
-
-            var updatedImages = loadedImages
-
-            if let image = object as? UIImage {
-                updatedImages.append(image)
-            }
-
-            loadImages(
-                from: results,
-                currentIndex: currentIndex + 1,
-                loadedImages: updatedImages
-            )
         }
     }
 
@@ -168,18 +151,12 @@ extension CatalogViewController: PHPickerViewControllerDelegate {
         setImporting(false)
 
         guard !images.isEmpty else {
-            showError(
-                message: "Не удалось загрузить выбранные изображения."
-            )
+            showError(message: "Не удалось загрузить выбранные изображения.")
             return
         }
 
-        let photos = images.map {
-            EditablePhoto(originalImage: $0)
-        }
-
         let editorViewController = EditorViewController(
-            photos: photos
+            photos: images.map { EditablePhoto(originalImage: $0) }
         )
 
         navigationController?.pushViewController(
