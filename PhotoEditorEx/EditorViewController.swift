@@ -13,9 +13,15 @@ final class EditorViewController: UIViewController {
 
     private var photos: [EditablePhoto]
 
-    private let originalImage: UIImage
-    private let previewImage: UIImage
-    private let previewCIImage: CIImage
+    private var originalImage: UIImage
+    private var previewImage: UIImage
+    private var previewCIImage: CIImage
+
+    private var currentPhotoIndex = 0
+    private var photoSwitchRequestID: UUID?
+    private var isApplyingPhotoState = false
+
+    private let filmstripView = EditorFilmstripView()
 
     private let filterPipeline = FilterPipeline()
     private let renderQueue = DispatchQueue(
@@ -45,9 +51,20 @@ final class EditorViewController: UIViewController {
 
     private var recipe: EditRecipe = .neutral {
         didSet {
+            guard photos.indices.contains(currentPhotoIndex) else {
+                return
+            }
+
+            photos[currentPhotoIndex].recipe = recipe
+
             guard oldValue != recipe else {
                 return
             }
+
+            guard !isApplyingPhotoState else {
+                return
+            }
+
             scheduleRenderPreview()
         }
     }
@@ -78,6 +95,9 @@ final class EditorViewController: UIViewController {
             self.previewCIImage = CIImage()
         }
 
+        self.recipe = firstPhoto.recipe
+        self.recipeBeforeAuto = firstPhoto.recipeBeforeAuto
+
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -101,14 +121,17 @@ final class EditorViewController: UIViewController {
         setupActions()
         setupBeforeAfterGesture()
 
-        editorImageView.image = previewImage
+        filmstripView.configure(photos: photos, selectedIndex: currentPhotoIndex)
+        controlsView.setRecipe(recipe, animated: false)
+        controlsView.setAutoEnabled(recipeBeforeAuto != nil)
+        editorImageView.setImage(previewImage, resetZoom: true)
     }
 
     private func updateTitle() {
         if photos.count == 1 {
             title = "Editor"
         } else {
-            title = "1 of \(photos.count)"
+            title = "\(currentPhotoIndex + 1) of \(photos.count)"
         }
     }
 
@@ -136,6 +159,7 @@ final class EditorViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(editorImageView)
+        view.addSubview(filmstripView)
         view.addSubview(controlsView)
         view.addSubview(activityIndicator)
 
@@ -144,15 +168,23 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
+        filmstripView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(controlsView.snp.top)
+            make.height.equalTo(photos.count > 1 ? 68 : 0)
+        }
+
         editorImageView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(controlsView.snp.top)
+            make.bottom.equalTo(filmstripView.snp.top)
         }
 
         activityIndicator.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+            make.center.equalTo(editorImageView)
         }
+
+        filmstripView.isHidden = photos.count <= 1
     }
 
     private func setupActions() {
@@ -248,11 +280,120 @@ final class EditorViewController: UIViewController {
             guard let self else { return }
 
             autoRequestID = nil
-            recipeBeforeAuto = nil
+            setRecipeBeforeAuto(nil)
 
             controlsView.setAutoEnabled(false)
             recipe = .neutral
         }
+
+        filmstripView.onPhotoSelected = { [weak self] index in
+            self?.showPhoto(at: index)
+        }
+    }
+
+    private func showPhoto(at index: Int) {
+        guard photos.indices.contains(index) else {
+            return
+        }
+
+        guard index != currentPhotoIndex else {
+            return
+        }
+
+        previewRenderRequest?.cancel()
+        previewRenderRequest = nil
+
+        autoRequestID = nil
+        isShowingOriginal = false
+
+        currentPhotoIndex = index
+
+        updateTitle()
+
+        filmstripView.setSelectedIndex(
+            index,
+            animated: true
+        )
+
+        let requestID = UUID()
+        photoSwitchRequestID = requestID
+
+        let photo = photos[index]
+
+        setPhotoLoading(true)
+
+        renderQueue.async { [weak self] in
+            let previewImage = photo.originalImage.resizedForEditorPreview(
+                maxPixelSize: 1200
+            )
+
+            let previewCIImage = CIImage(image: previewImage) ?? CIImage()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard photoSwitchRequestID == requestID else {
+                    return
+                }
+
+                guard currentPhotoIndex == index else {
+                    return
+                }
+
+                photoSwitchRequestID = nil
+
+                originalImage = photo.originalImage
+                self.previewImage = previewImage
+                self.previewCIImage = previewCIImage
+                renderedPreviewImage = nil
+
+                recipeBeforeAuto = photo.recipeBeforeAuto
+
+                controlsView.setRecipe(
+                    photo.recipe,
+                    animated: false
+                )
+
+                controlsView.setAutoEnabled(
+                    photo.recipeBeforeAuto != nil
+                )
+
+                editorImageView.setImage(
+                    previewImage,
+                    resetZoom: true
+                )
+
+                isApplyingPhotoState = true
+                recipe = photo.recipe
+                isApplyingPhotoState = false
+
+                scheduleRenderPreview()
+                setPhotoLoading(false)
+            }
+        }
+    }
+
+    private func setPhotoLoading(_ isLoading: Bool) {
+        controlsView.isUserInteractionEnabled = !isLoading
+        navigationItem.rightBarButtonItem?.isEnabled = !isLoading
+
+        if isLoading {
+            activityIndicator.startAnimating()
+        } else {
+            activityIndicator.stopAnimating()
+        }
+    }
+
+    private func setRecipeBeforeAuto(
+        _ newRecipe: EditRecipe?
+    ) {
+        recipeBeforeAuto = newRecipe
+        guard photos.indices.contains(currentPhotoIndex) else {
+            return
+        }
+        photos[currentPhotoIndex].recipeBeforeAuto = newRecipe
     }
 
     private func updateRecipeManually(
@@ -260,7 +401,7 @@ final class EditorViewController: UIViewController {
     ) {
         if autoRequestID != nil {
             autoRequestID = nil
-            recipeBeforeAuto = nil
+            setRecipeBeforeAuto(nil)
             controlsView.setAutoEnabled(false)
         }
         update(&recipe)
@@ -283,7 +424,7 @@ final class EditorViewController: UIViewController {
         let inputImage = previewCIImage
         let service = autoAdjustmentService
 
-        recipeBeforeAuto = baseRecipe
+        setRecipeBeforeAuto(baseRecipe)
 
         let requestID = UUID()
         autoRequestID = requestID
@@ -317,7 +458,7 @@ final class EditorViewController: UIViewController {
             return
         }
 
-        recipeBeforeAuto = nil
+        setRecipeBeforeAuto(nil)
 
         controlsView.setRecipe(
             previousRecipe,
