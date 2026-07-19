@@ -15,13 +15,10 @@ final class EditorImageView: UIView {
             imageView.image
         }
         set {
-            let imageSizeChanged = imageView.image?.size != newValue?.size
-
-            imageView.image = newValue
-
-            if imageSizeChanged {
-                setNeedsLayout()
-            }
+            setImage(
+                newValue,
+                resetZoom: false
+            )
         }
     }
 
@@ -49,6 +46,7 @@ final class EditorImageView: UIView {
     }()
 
     private var lastLayoutSize: CGSize = .zero
+    private var needsImageFrameUpdate = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -76,13 +74,33 @@ final class EditorImageView: UIView {
             return
         }
 
-        guard lastLayoutSize != currentSize else {
+        let containerSizeChanged = lastLayoutSize != currentSize
+
+        guard containerSizeChanged || needsImageFrameUpdate else {
             updateContentInset()
             return
         }
 
         lastLayoutSize = currentSize
+        needsImageFrameUpdate = false
+
         configureImageFrame()
+    }
+
+    func setImage(
+        _ image: UIImage?,
+        resetZoom: Bool
+    ) {
+        let imageSizeChanged = imageView.image?.size != image?.size
+
+        imageView.image = image
+
+        guard imageSizeChanged || resetZoom else {
+            return
+        }
+
+        needsImageFrameUpdate = true
+        setNeedsLayout()
     }
 
     func resetZoom(animated: Bool) {

@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct EditRecipe: Equatable {
+struct EditRecipe: Equatable, Codable {
 
     static let neutral = EditRecipe()
 

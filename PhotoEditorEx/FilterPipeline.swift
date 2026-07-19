@@ -15,15 +15,21 @@ final class FilterPipeline {
         .cacheIntermediates: false
     ])
 
-    func renderPreview(ciImage inputImage: CIImage, recipe: EditRecipe) -> UIImage? {
+    func renderPreview(
+        ciImage inputImage: CIImage,
+        recipe: EditRecipe
+    ) -> UIImage? {
         render(
             ciImage: inputImage,
             recipe: recipe,
-            scale: UIScreen.main.scale
+            scale: 1
         )
     }
 
-    func renderFullSize(image: UIImage, recipe: EditRecipe) -> UIImage? {
+    func renderFullSize(
+        image: UIImage,
+        recipe: EditRecipe
+    ) -> UIImage? {
         let normalizedImage = image.normalized()
 
         guard let inputCIImage = CIImage(image: normalizedImage) else {

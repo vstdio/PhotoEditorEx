@@ -139,59 +139,87 @@ final class EditorViewController: UIViewController {
 
     private func setupActions() {
         controlsView.onBrightnessChanged = { [weak self] value in
-            self?.recipe.brightness = value
+            self?.updateRecipeManually {
+                $0.brightness = value
+            }
         }
 
         controlsView.onContrastChanged = { [weak self] value in
-            self?.recipe.contrast = value
+            self?.updateRecipeManually {
+                $0.contrast = value
+            }
         }
 
         controlsView.onSaturationChanged = { [weak self] value in
-            self?.recipe.saturation = value
+            self?.updateRecipeManually {
+                $0.saturation = value
+            }
         }
 
         controlsView.onTemperatureChanged = { [weak self] value in
-            self?.recipe.temperature = value
+            self?.updateRecipeManually {
+                $0.temperature = value
+            }
         }
 
         controlsView.onTintChanged = { [weak self] value in
-            self?.recipe.tint = value
+            self?.updateRecipeManually {
+                $0.tint = value
+            }
         }
 
         controlsView.onVibranceChanged = { [weak self] value in
-            self?.recipe.vibrance = value
+            self?.updateRecipeManually {
+                $0.vibrance = value
+            }
         }
 
         controlsView.onExposureChanged = { [weak self] value in
-            self?.recipe.exposure = value
+            self?.updateRecipeManually {
+                $0.exposure = value
+            }
         }
 
         controlsView.onShadowsChanged = { [weak self] value in
-            self?.recipe.shadows = value
+            self?.updateRecipeManually {
+                $0.shadows = value
+            }
         }
 
         controlsView.onHighlightsChanged = { [weak self] value in
-            self?.recipe.highlights = value
+            self?.updateRecipeManually {
+                $0.highlights = value
+            }
         }
 
         controlsView.onWhitesChanged = { [weak self] value in
-            self?.recipe.whites = value
+            self?.updateRecipeManually {
+                $0.whites = value
+            }
         }
 
         controlsView.onBlacksChanged = { [weak self] value in
-            self?.recipe.blacks = value
+            self?.updateRecipeManually {
+                $0.blacks = value
+            }
         }
 
         controlsView.onBlurChanged = { [weak self] value in
-            self?.recipe.blurRadius = value
+            self?.updateRecipeManually {
+                $0.blurRadius = value
+            }
         }
 
         controlsView.onSharpenChanged = { [weak self] value in
-            self?.recipe.sharpen = value
+            self?.updateRecipeManually {
+                $0.sharpen = value
+            }
         }
 
         controlsView.onVignetteChanged = { [weak self] value in
-            self?.recipe.vignette = value
+            self?.updateRecipeManually {
+                $0.vignette = value
+            }
         }
 
         controlsView.onAutoChanged = { [weak self] isEnabled in
@@ -207,6 +235,17 @@ final class EditorViewController: UIViewController {
             controlsView.setAutoEnabled(false)
             recipe = .neutral
         }
+    }
+
+    private func updateRecipeManually(
+        _ update: (inout EditRecipe) -> Void
+    ) {
+        if autoRequestID != nil {
+            autoRequestID = nil
+            recipeBeforeAuto = nil
+            controlsView.setAutoEnabled(false)
+        }
+        update(&recipe)
     }
 
     private func setAutoEnabled(_ isEnabled: Bool) {
