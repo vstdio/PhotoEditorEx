@@ -37,6 +37,12 @@ final class CatalogViewController: UIViewController {
         return button
     }()
 
+    private let activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -51,7 +57,8 @@ final class CatalogViewController: UIViewController {
         let stackView = UIStackView(arrangedSubviews: [
             titleLabel,
             subtitleLabel,
-            importButton
+            importButton,
+            activityIndicator
         ])
 
         stackView.axis = .vertical
@@ -82,7 +89,7 @@ final class CatalogViewController: UIViewController {
     @objc private func importButtonTapped() {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
         configuration.filter = .images
-        configuration.selectionLimit = 1
+        configuration.selectionLimit = 20
         configuration.preferredAssetRepresentationMode = .current
 
         let picker = PHPickerViewController(configuration: configuration)
@@ -94,35 +101,100 @@ final class CatalogViewController: UIViewController {
 
 extension CatalogViewController: PHPickerViewControllerDelegate {
 
-    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    func picker(
+        _ picker: PHPickerViewController,
+        didFinishPicking results: [PHPickerResult]
+    ) {
         picker.dismiss(animated: true)
 
-        guard let result = results.first else {
+        guard !results.isEmpty else {
             return
         }
 
-        let provider = result.itemProvider
+        setImporting(true)
+
+        loadImages(
+            from: results,
+            currentIndex: 0,
+            loadedImages: []
+        )
+    }
+
+    private func loadImages(
+        from results: [PHPickerResult],
+        currentIndex: Int,
+        loadedImages: [UIImage]
+    ) {
+        guard currentIndex < results.count else {
+            DispatchQueue.main.async { [weak self] in
+                self?.finishImport(images: loadedImages)
+            }
+
+            return
+        }
+
+        let provider = results[currentIndex].itemProvider
 
         guard provider.canLoadObject(ofClass: UIImage.self) else {
-            showError(message: "Не удалось загрузить изображение.")
+            loadImages(
+                from: results,
+                currentIndex: currentIndex + 1,
+                loadedImages: loadedImages
+            )
+
             return
         }
 
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
-            DispatchQueue.main.async {
-                if let error {
-                    self?.showError(message: error.localizedDescription)
-                    return
-                }
-
-                guard let image = object as? UIImage else {
-                    self?.showError(message: "Файл не является UIImage.")
-                    return
-                }
-
-                let editorViewController = EditorViewController(image: image)
-                self?.navigationController?.pushViewController(editorViewController, animated: true)
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self else {
+                return
             }
+
+            var updatedImages = loadedImages
+
+            if let image = object as? UIImage {
+                updatedImages.append(image)
+            }
+
+            loadImages(
+                from: results,
+                currentIndex: currentIndex + 1,
+                loadedImages: updatedImages
+            )
+        }
+    }
+
+    private func finishImport(images: [UIImage]) {
+        setImporting(false)
+
+        guard !images.isEmpty else {
+            showError(
+                message: "Не удалось загрузить выбранные изображения."
+            )
+            return
+        }
+
+        let photos = images.map {
+            EditablePhoto(originalImage: $0)
+        }
+
+        let editorViewController = EditorViewController(
+            photos: photos
+        )
+
+        navigationController?.pushViewController(
+            editorViewController,
+            animated: true
+        )
+    }
+
+    private func setImporting(_ isImporting: Bool) {
+        importButton.isEnabled = !isImporting
+
+        if isImporting {
+            activityIndicator.startAnimating()
+        } else {
+            activityIndicator.stopAnimating()
         }
     }
 
@@ -133,7 +205,13 @@ extension CatalogViewController: PHPickerViewControllerDelegate {
             preferredStyle: .alert
         )
 
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(
+            UIAlertAction(
+                title: "OK",
+                style: .default
+            )
+        )
+
         present(alert, animated: true)
     }
 }

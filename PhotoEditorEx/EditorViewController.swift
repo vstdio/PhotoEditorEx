@@ -11,6 +11,8 @@ import SnapKit
 
 final class EditorViewController: UIViewController {
 
+    private var photos: [EditablePhoto]
+
     private let originalImage: UIImage
     private let previewImage: UIImage
     private let previewCIImage: CIImage
@@ -56,10 +58,18 @@ final class EditorViewController: UIViewController {
     private let editorImageView = EditorImageView()
     private let controlsView = EditorControlsView()
 
-    init(image: UIImage) {
-        self.originalImage = image
+    init(photos: [EditablePhoto]) {
+        guard let firstPhoto = photos.first else {
+            fatalError("EditorViewController requires at least one photo")
+        }
 
-        let preview = image.resizedForEditorPreview(maxPixelSize: 1200)
+        self.photos = photos
+        self.originalImage = firstPhoto.originalImage
+
+        let preview = firstPhoto.originalImage.resizedForEditorPreview(
+            maxPixelSize: 1200
+        )
+
         self.previewImage = preview
 
         if let ciImage = CIImage(image: preview) {
@@ -83,7 +93,7 @@ final class EditorViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        title = "Editor"
+        updateTitle()
         view.backgroundColor = .systemBackground
 
         setupNavigationBar()
@@ -92,6 +102,14 @@ final class EditorViewController: UIViewController {
         setupBeforeAfterGesture()
 
         editorImageView.image = previewImage
+    }
+
+    private func updateTitle() {
+        if photos.count == 1 {
+            title = "Editor"
+        } else {
+            title = "1 of \(photos.count)"
+        }
     }
 
     private func setupBeforeAfterGesture() {
