@@ -7,9 +7,16 @@
 
 import UIKit
 import PhotosUI
+import UniformTypeIdentifiers
 import SnapKit
 
 final class CatalogViewController: UIViewController {
+
+    private let storageService = PhotoCollectionStorageService()
+
+    private var collections: [PhotoCollection] = []
+    private var coverImages: [UUID: UIImage] = [:]
+    private var catalogLoadTask: Task<Void, Never>?
 
     private let titleLabel: UILabel = {
         let label = UILabel()
@@ -21,8 +28,8 @@ final class CatalogViewController: UIViewController {
 
     private let subtitleLabel: UILabel = {
         let label = UILabel()
-        label.text = "Импортируй фото и попробуй первую обработку"
-        label.font = .systemFont(ofSize: 17, weight: .regular)
+        label.text = "Импортируй фотографии и создай первую коллекцию"
+        label.font = .systemFont(ofSize: 17)
         label.textColor = .secondaryLabel
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -31,16 +38,43 @@ final class CatalogViewController: UIViewController {
 
     private let importButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Import Photo", for: .normal)
+        button.setTitle("Import Photos", for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         button.configuration = .filled()
         return button
     }()
 
+    private lazy var emptyStateStackView: UIStackView = {
+        let stackView = UIStackView(arrangedSubviews: [
+            titleLabel,
+            subtitleLabel,
+            importButton
+        ])
+
+        stackView.axis = .vertical
+        stackView.spacing = 20
+        stackView.alignment = .center
+
+        return stackView
+    }()
+
+    private let tableView: UITableView = {
+        let tableView = UITableView(frame: .zero, style: .insetGrouped)
+        tableView.rowHeight = 76
+        return tableView
+    }()
+
     private let activityIndicator: UIActivityIndicatorView = {
-        let indicator = UIActivityIndicatorView(style: .medium)
+        let indicator = UIActivityIndicatorView(style: .large)
         indicator.hidesWhenStopped = true
         return indicator
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
     }()
 
     override func viewDidLoad() {
@@ -49,25 +83,43 @@ final class CatalogViewController: UIViewController {
         title = "Catalog"
         view.backgroundColor = .systemBackground
 
+        setupNavigationBar()
         setupLayout()
         setupActions()
+
+        tableView.dataSource = self
+        tableView.delegate = self
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        reloadCatalog()
+    }
+
+    deinit {
+        catalogLoadTask?.cancel()
+    }
+
+    private func setupNavigationBar() {
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            systemItem: .add,
+            primaryAction: UIAction { [weak self] _ in
+                self?.showPhotoPicker()
+            }
+        )
     }
 
     private func setupLayout() {
-        let stackView = UIStackView(arrangedSubviews: [
-            titleLabel,
-            subtitleLabel,
-            importButton,
-            activityIndicator
-        ])
+        view.addSubview(tableView)
+        view.addSubview(emptyStateStackView)
+        view.addSubview(activityIndicator)
 
-        stackView.axis = .vertical
-        stackView.spacing = 20
-        stackView.alignment = .center
+        tableView.snp.makeConstraints { make in
+            make.edges.equalTo(view.safeAreaLayoutGuide)
+        }
 
-        view.addSubview(stackView)
-
-        stackView.snp.makeConstraints { make in
+        emptyStateStackView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview().inset(24)
             make.centerY.equalToSuperview()
         }
@@ -75,6 +127,10 @@ final class CatalogViewController: UIViewController {
         importButton.snp.makeConstraints { make in
             make.height.equalTo(48)
             make.width.equalTo(180)
+        }
+
+        activityIndicator.snp.makeConstraints { make in
+            make.center.equalToSuperview()
         }
     }
 
@@ -87,6 +143,10 @@ final class CatalogViewController: UIViewController {
     }
 
     @objc private func importButtonTapped() {
+        showPhotoPicker()
+    }
+
+    private func showPhotoPicker() {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
         configuration.filter = .images
         configuration.selectionLimit = 20
@@ -97,78 +157,184 @@ final class CatalogViewController: UIViewController {
 
         present(picker, animated: true)
     }
-}
 
-extension CatalogViewController: PHPickerViewControllerDelegate {
+    private func reloadCatalog() {
+        catalogLoadTask?.cancel()
 
-    func picker(
-        _ picker: PHPickerViewController,
-        didFinishPicking results: [PHPickerResult]
-    ) {
-        picker.dismiss(animated: true)
-        guard !results.isEmpty else { return }
-
-        setImporting(true)
-
-        Task { @MainActor [weak self] in
+        catalogLoadTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let images = await loadImages(from: results)
-            finishImport(images: images)
-        }
-    }
 
-    private func loadImages(
-        from results: [PHPickerResult]
-    ) async -> [UIImage] {
-        var images: [UIImage] = []
+            setLoading(true)
+            defer { setLoading(false) }
 
-        for result in results {
-            let provider = result.itemProvider
-            guard let image = await loadImage(from: provider) else { continue }
-            images.append(image)
-        }
+            do {
+                let loadedCollections = try await storageService.loadCollections()
+                var loadedCovers: [UUID: UIImage] = [:]
 
-        return images
-    }
+                for collection in loadedCollections {
+                    guard !Task.isCancelled else { return }
 
-    private func loadImage(
-        from provider: NSItemProvider
-    ) async -> UIImage? {
-        guard provider.canLoadObject(ofClass: UIImage.self) else {
-            return nil
-        }
+                    loadedCovers[collection.id] = try await storageService.loadCoverImage(
+                        for: collection
+                    )
+                }
 
-        return await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: UIImage.self) { object, _ in
-                continuation.resume(
-                    returning: object as? UIImage
-                )
+                collections = loadedCollections
+                coverImages = loadedCovers
+
+                tableView.reloadData()
+                updateCatalogState()
+            } catch {
+                showError(message: error.localizedDescription)
             }
         }
     }
 
-    private func finishImport(images: [UIImage]) {
-        setImporting(false)
+    private func updateCatalogState() {
+        let isEmpty = collections.isEmpty
 
-        guard !images.isEmpty else {
-            showError(message: "Не удалось загрузить выбранные изображения.")
-            return
-        }
-
-        let editorViewController = EditorViewController(
-            photos: images.map { EditablePhoto(originalImage: $0) }
-        )
-
-        navigationController?.pushViewController(
-            editorViewController,
-            animated: true
-        )
+        emptyStateStackView.isHidden = !isEmpty
+        tableView.isHidden = isEmpty
     }
 
-    private func setImporting(_ isImporting: Bool) {
-        importButton.isEnabled = !isImporting
+    private func importCollection(from results: [PHPickerResult]) {
+        setLoading(true)
 
-        if isImporting {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            var createdCollection: PhotoCollection?
+
+            do {
+                var collection = try await storageService.createCollection()
+                createdCollection = collection
+
+                var editablePhotos: [EditablePhoto] = []
+
+                for result in results {
+                    guard let photo = try await importPhoto(
+                        from: result,
+                        collectionID: collection.id
+                    ) else {
+                        continue
+                    }
+
+                    editablePhotos.append(photo)
+                }
+
+                guard !editablePhotos.isEmpty else {
+                    throw PhotoCollectionStorageError.noPhotosImported
+                }
+
+                collection.photos = editablePhotos.map(\.storedPhoto)
+                collection.updatedAt = Date()
+
+                try await storageService.save(collection)
+
+                setLoading(false)
+
+                let editorViewController = EditorViewController(
+                    collectionID: collection.id,
+                    photos: editablePhotos,
+                    storageService: storageService
+                )
+
+                navigationController?.pushViewController(
+                    editorViewController,
+                    animated: true
+                )
+            } catch {
+                if let createdCollection {
+                    try? await storageService.deleteCollection(id: createdCollection.id)
+                }
+
+                setLoading(false)
+                showError(message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func importPhoto(
+        from result: PHPickerResult,
+        collectionID: UUID
+    ) async throws -> EditablePhoto? {
+        let provider = result.itemProvider
+
+        guard let typeIdentifier = provider.registeredTypeIdentifiers.first(where: {
+            UTType($0)?.conforms(to: .image) == true
+        }) else {
+            return nil
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) {
+                [storageService] temporaryURL, error in
+
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let temporaryURL else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                do {
+                    let photo = try storageService.copyImportedPhoto(
+                        from: temporaryURL,
+                        typeIdentifier: typeIdentifier,
+                        collectionID: collectionID
+                    )
+
+                    continuation.resume(returning: photo)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func openCollection(_ collection: PhotoCollection) {
+        setLoading(true)
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            do {
+                let photos = try await storageService.loadEditablePhotos(
+                    for: collection
+                )
+
+                guard !photos.isEmpty else {
+                    throw PhotoCollectionStorageError.noPhotosImported
+                }
+
+                setLoading(false)
+
+                let editorViewController = EditorViewController(
+                    collectionID: collection.id,
+                    photos: photos,
+                    storageService: storageService
+                )
+
+                navigationController?.pushViewController(
+                    editorViewController,
+                    animated: true
+                )
+            } catch {
+                setLoading(false)
+                showError(message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func setLoading(_ isLoading: Bool) {
+        importButton.isEnabled = !isLoading
+        tableView.isUserInteractionEnabled = !isLoading
+        navigationItem.rightBarButtonItem?.isEnabled = !isLoading
+
+        if isLoading {
             activityIndicator.startAnimating()
         } else {
             activityIndicator.stopAnimating()
@@ -182,13 +348,53 @@ extension CatalogViewController: PHPickerViewControllerDelegate {
             preferredStyle: .alert
         )
 
-        alert.addAction(
-            UIAlertAction(
-                title: "OK",
-                style: .default
-            )
-        )
-
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+}
+
+extension CatalogViewController: PHPickerViewControllerDelegate {
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+
+        guard !results.isEmpty else { return }
+
+        importCollection(from: results)
+    }
+}
+
+extension CatalogViewController: UITableViewDataSource, UITableViewDelegate {
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        collections.count
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let reuseIdentifier = "PhotoCollectionCell"
+
+        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier)
+            ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseIdentifier)
+
+        let collection = collections[indexPath.row]
+
+        cell.textLabel?.text = Self.dateFormatter.string(from: collection.createdAt)
+        cell.detailTextLabel?.text = "\(collection.photos.count) photos"
+        cell.imageView?.image = coverImages[collection.id]
+            ?? UIImage(systemName: "photo.stack")
+        cell.imageView?.contentMode = .scaleAspectFill
+        cell.imageView?.clipsToBounds = true
+        cell.accessoryType = .disclosureIndicator
+
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+
+        openCollection(collections[indexPath.row])
     }
 }

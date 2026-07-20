@@ -11,6 +11,10 @@ import SnapKit
 
 final class EditorViewController: UIViewController {
 
+    private let collectionID: UUID
+    private let collectionStorageService: PhotoCollectionStorageService
+    private var collectionSaveTask: Task<Void, Never>?
+
     private var photos: [EditablePhoto]
 
     private var originalImage: UIImage
@@ -79,6 +83,7 @@ final class EditorViewController: UIViewController {
             guard oldValue != recipe else { return }
             guard !isApplyingPhotoState else { return }
 
+            scheduleCollectionSave()
             scheduleRenderPreview()
         }
     }
@@ -89,26 +94,24 @@ final class EditorViewController: UIViewController {
     private let editorImageView = EditorImageView()
     private let controlsView = EditorControlsView()
 
-    init(photos: [EditablePhoto]) {
+    init(
+        collectionID: UUID,
+        photos: [EditablePhoto],
+        storageService: PhotoCollectionStorageService
+    ) {
         guard let firstPhoto = photos.first else {
             fatalError("EditorViewController requires at least one photo")
         }
 
+        self.collectionID = collectionID
+        self.collectionStorageService = storageService
         self.photos = photos
         self.originalImage = firstPhoto.originalImage
 
-        let preview = firstPhoto.originalImage.resizedForEditorPreview(
-            maxPixelSize: 1200
-        )
+        let preview = firstPhoto.originalImage.resizedForEditorPreview(maxPixelSize: 1200)
 
         self.previewImage = preview
-
-        if let ciImage = CIImage(image: preview) {
-            self.previewCIImage = ciImage
-        } else {
-            self.previewCIImage = CIImage()
-        }
-
+        self.previewCIImage = CIImage(image: preview) ?? CIImage()
         self.recipe = firstPhoto.recipe
         self.recipeBeforeAuto = firstPhoto.recipeBeforeAuto
 
@@ -122,6 +125,7 @@ final class EditorViewController: UIViewController {
 
     deinit {
         previewRenderRequest?.cancel()
+        collectionSaveTask?.cancel()
     }
 
     override func viewDidLoad() {
@@ -139,6 +143,11 @@ final class EditorViewController: UIViewController {
         controlsView.setRecipe(recipe, animated: false)
         controlsView.setAutoEnabled(recipeBeforeAuto != nil)
         editorImageView.setImage(previewImage, resetZoom: true)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        saveCollectionImmediately()
     }
 
     private func updateTitle() {
@@ -483,6 +492,7 @@ final class EditorViewController: UIViewController {
             return
         }
         photos[currentPhotoIndex].recipeBeforeAuto = newRecipe
+        scheduleCollectionSave()
     }
 
     private func updateRecipeManually(
@@ -582,6 +592,7 @@ final class EditorViewController: UIViewController {
             }
 
             photos = updatedPhotos
+            scheduleCollectionSave()
 
             applyCurrentPhotoStateAfterAutoForAll()
             setApplyingAutoToAll(false)
@@ -906,6 +917,34 @@ final class EditorViewController: UIViewController {
                 }
                 continuation.resume(returning: renderedImage)
             }
+        }
+    }
+
+    private func scheduleCollectionSave() {
+        let storedPhotos = photos.map(\.storedPhoto)
+        collectionSaveTask?.cancel()
+
+        collectionSaveTask = Task { [collectionStorageService, collectionID] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+
+            guard !Task.isCancelled else { return }
+
+            try? await collectionStorageService.updateCollection(
+                id: collectionID,
+                photos: storedPhotos
+            )
+        }
+    }
+
+    private func saveCollectionImmediately() {
+        collectionSaveTask?.cancel()
+        let storedPhotos = photos.map(\.storedPhoto)
+
+        Task { [collectionStorageService, collectionID] in
+            try? await collectionStorageService.updateCollection(
+                id: collectionID,
+                photos: storedPhotos
+            )
         }
     }
 
