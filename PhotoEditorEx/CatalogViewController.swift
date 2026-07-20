@@ -56,6 +56,11 @@ final class CatalogViewController: UIViewController {
         setupNavigationBar()
         setupLayout()
 
+        tableView.register(
+            PhotoCollectionCell.self,
+            forCellReuseIdentifier: PhotoCollectionCell.reuseIdentifier
+        )
+
         tableView.dataSource = self
         tableView.delegate = self
     }
@@ -389,24 +394,21 @@ extension CatalogViewController: UITableViewDataSource, UITableViewDelegate {
         collections.count
     }
 
-    func tableView(
-        _ tableView: UITableView,
-        cellForRowAt indexPath: IndexPath
-    ) -> UITableViewCell {
-        let reuseIdentifier = "PhotoCollectionCell"
-
-        let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier)
-            ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseIdentifier)
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard let cell = tableView.dequeueReusableCell(
+            withIdentifier: PhotoCollectionCell.reuseIdentifier,
+            for: indexPath
+        ) as? PhotoCollectionCell else {
+            return UITableViewCell()
+        }
 
         let collection = collections[indexPath.row]
 
-        cell.textLabel?.text = Self.dateFormatter.string(from: collection.createdAt)
-        cell.detailTextLabel?.text = "\(collection.photos.count) photos"
-        cell.imageView?.image = coverImages[collection.id]
-            ?? UIImage(systemName: "photo.stack")
-        cell.imageView?.contentMode = .scaleAspectFill
-        cell.imageView?.clipsToBounds = true
-        cell.accessoryType = .disclosureIndicator
+        cell.configure(
+            image: coverImages[collection.id] ?? UIImage(systemName: "photo.stack"),
+            title: Self.dateFormatter.string(from: collection.createdAt),
+            subtitle: "\(collection.photos.count) photos"
+        )
 
         return cell
     }
@@ -432,5 +434,97 @@ extension CatalogViewController: UITableViewDataSource, UITableViewDelegate {
         configuration.performsFirstActionWithFullSwipe = false
 
         return configuration
+    }
+}
+
+private final class PhotoCollectionCell: UITableViewCell {
+
+    static let reuseIdentifier = "PhotoCollectionCell"
+
+    private let thumbnailContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .secondarySystemBackground
+        view.layer.cornerRadius = 8
+        view.clipsToBounds = true
+        return view
+    }()
+
+    private let thumbnailImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFill
+        imageView.tintColor = .secondaryLabel
+        return imageView
+    }()
+
+    private let titleLabel: UILabel = {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .body)
+        label.textColor = .label
+        return label
+    }()
+
+    private let subtitleLabel: UILabel = {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.textColor = .secondaryLabel
+        return label
+    }()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+
+        accessoryType = .disclosureIndicator
+
+        setupLayout()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+
+        thumbnailImageView.image = nil
+        titleLabel.text = nil
+        subtitleLabel.text = nil
+    }
+
+    func configure(image: UIImage?, title: String, subtitle: String) {
+        thumbnailImageView.image = image
+        titleLabel.text = title
+        subtitleLabel.text = subtitle
+    }
+
+    private func setupLayout() {
+        let labelsStackView = UIStackView(arrangedSubviews: [
+            titleLabel,
+            subtitleLabel
+        ])
+
+        labelsStackView.axis = .vertical
+        labelsStackView.spacing = 3
+
+        contentView.addSubview(thumbnailContainerView)
+        contentView.addSubview(labelsStackView)
+
+        thumbnailContainerView.addSubview(thumbnailImageView)
+
+        thumbnailContainerView.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(12)
+            make.centerY.equalToSuperview()
+            make.size.equalTo(52)
+        }
+
+        thumbnailImageView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        labelsStackView.snp.makeConstraints { make in
+            make.leading.equalTo(thumbnailContainerView.snp.trailing).offset(12)
+            make.trailing.lessThanOrEqualToSuperview().inset(8)
+            make.centerY.equalToSuperview()
+        }
     }
 }
