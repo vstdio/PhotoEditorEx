@@ -18,44 +18,14 @@ final class CatalogViewController: UIViewController {
     private var coverImages: [UUID: UIImage] = [:]
     private var catalogLoadTask: Task<Void, Never>?
 
-    private let titleLabel: UILabel = {
+    private let emptyStateLabel: UILabel = {
         let label = UILabel()
-        label.text = "PhotoLab"
-        label.font = .systemFont(ofSize: 32, weight: .bold)
-        label.textAlignment = .center
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Импортируй фотографии и создай первую коллекцию"
-        label.font = .systemFont(ofSize: 17)
+        label.text = "Здесь появятся коллекции фотографий.\nНажми +, чтобы импортировать первую."
+        label.font = .preferredFont(forTextStyle: .body)
         label.textColor = .secondaryLabel
         label.textAlignment = .center
         label.numberOfLines = 0
         return label
-    }()
-
-    private let importButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Import Photos", for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        button.configuration = .filled()
-        return button
-    }()
-
-    private lazy var emptyStateStackView: UIStackView = {
-        let stackView = UIStackView(arrangedSubviews: [
-            titleLabel,
-            subtitleLabel,
-            importButton
-        ])
-
-        stackView.axis = .vertical
-        stackView.spacing = 20
-        stackView.alignment = .center
-
-        return stackView
     }()
 
     private let tableView: UITableView = {
@@ -85,7 +55,6 @@ final class CatalogViewController: UIViewController {
 
         setupNavigationBar()
         setupLayout()
-        setupActions()
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -112,38 +81,21 @@ final class CatalogViewController: UIViewController {
 
     private func setupLayout() {
         view.addSubview(tableView)
-        view.addSubview(emptyStateStackView)
+        view.addSubview(emptyStateLabel)
         view.addSubview(activityIndicator)
 
         tableView.snp.makeConstraints { make in
             make.edges.equalTo(view.safeAreaLayoutGuide)
         }
 
-        emptyStateStackView.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview().inset(24)
+        emptyStateLabel.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(32)
             make.centerY.equalToSuperview()
-        }
-
-        importButton.snp.makeConstraints { make in
-            make.height.equalTo(48)
-            make.width.equalTo(180)
         }
 
         activityIndicator.snp.makeConstraints { make in
             make.center.equalToSuperview()
         }
-    }
-
-    private func setupActions() {
-        importButton.addTarget(
-            self,
-            action: #selector(importButtonTapped),
-            for: .touchUpInside
-        )
-    }
-
-    @objc private func importButtonTapped() {
-        showPhotoPicker()
     }
 
     private func showPhotoPicker() {
@@ -193,7 +145,7 @@ final class CatalogViewController: UIViewController {
     private func updateCatalogState() {
         let isEmpty = collections.isEmpty
 
-        emptyStateStackView.isHidden = !isEmpty
+        emptyStateLabel.isHidden = !isEmpty
         tableView.isHidden = isEmpty
     }
 
@@ -329,8 +281,75 @@ final class CatalogViewController: UIViewController {
         }
     }
 
+    private func confirmCollectionDeletion(
+        at indexPath: IndexPath,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard collections.indices.contains(indexPath.row) else {
+            completion(false)
+            return
+        }
+
+        let collection = collections[indexPath.row]
+
+        let alert = UIAlertController(
+            title: "Удалить коллекцию?",
+            message: "Коллекция и сохраненные оригиналы будут удалены без возможности восстановления.",
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel) { _ in
+            completion(false)
+        })
+
+        alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+            self?.deleteCollection(collection, at: indexPath, completion: completion)
+        })
+
+        present(alert, animated: true)
+    }
+
+    private func deleteCollection(
+        _ collection: PhotoCollection,
+        at indexPath: IndexPath,
+        completion: @escaping (Bool) -> Void
+    ) {
+        setLoading(true)
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                completion(false)
+                return
+            }
+
+            do {
+                try await storageService.deleteCollection(id: collection.id)
+
+                guard let currentIndex = collections.firstIndex(where: { $0.id == collection.id }) else {
+                    setLoading(false)
+                    completion(false)
+                    return
+                }
+
+                collections.remove(at: currentIndex)
+                coverImages.removeValue(forKey: collection.id)
+
+                let currentIndexPath = IndexPath(row: currentIndex, section: 0)
+
+                tableView.deleteRows(at: [currentIndexPath], with: .automatic)
+                updateCatalogState()
+                setLoading(false)
+
+                completion(true)
+            } catch {
+                setLoading(false)
+                completion(false)
+                showError(message: error.localizedDescription)
+            }
+        }
+    }
+
     private func setLoading(_ isLoading: Bool) {
-        importButton.isEnabled = !isLoading
         tableView.isUserInteractionEnabled = !isLoading
         navigationItem.rightBarButtonItem?.isEnabled = !isLoading
 
@@ -394,7 +413,24 @@ extension CatalogViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-
         openCollection(collections[indexPath.row])
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        let deleteAction = UIContextualAction(style: .destructive, title: "Удалить") {
+            [weak self] _, _, completion in
+
+            self?.confirmCollectionDeletion(at: indexPath, completion: completion)
+        }
+
+        deleteAction.image = UIImage(systemName: "trash")
+
+        let configuration = UISwipeActionsConfiguration(actions: [deleteAction])
+        configuration.performsFirstActionWithFullSwipe = false
+
+        return configuration
     }
 }
