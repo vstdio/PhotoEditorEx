@@ -26,6 +26,16 @@ final class EditorViewController: UIViewController {
     private var isApplyingPhotoState = false
 
     private let filmstripView = EditorFilmstripView()
+    private let presetPickerView = PresetPickerView()
+
+    private var selectedPreset: PhotoPreset {
+        didSet {
+            guard oldValue != selectedPreset else { return }
+
+            scheduleCollectionSave()
+            scheduleRenderPreview()
+        }
+    }
 
     private let filterPipeline = FilterPipeline()
     private let renderQueue = DispatchQueue(
@@ -97,6 +107,7 @@ final class EditorViewController: UIViewController {
     init(
         collectionID: UUID,
         photos: [EditablePhoto],
+        selectedPreset: PhotoPreset,
         storageService: PhotoCollectionStorageService
     ) {
         guard let firstPhoto = photos.first else {
@@ -106,6 +117,7 @@ final class EditorViewController: UIViewController {
         self.collectionID = collectionID
         self.collectionStorageService = storageService
         self.photos = photos
+        self.selectedPreset = selectedPreset
         self.originalImage = firstPhoto.originalImage
 
         let preview = firstPhoto.originalImage.resizedForEditorPreview(maxPixelSize: 1200)
@@ -139,6 +151,7 @@ final class EditorViewController: UIViewController {
         setupActions()
         setupBeforeAfterGesture()
 
+        presetPickerView.setSelectedPreset(selectedPreset, animated: false)
         filmstripView.configure(photos: photos, selectedIndex: currentPhotoIndex)
         controlsView.setRecipe(recipe, animated: false)
         controlsView.setAutoEnabled(recipeBeforeAuto != nil)
@@ -241,6 +254,7 @@ final class EditorViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(editorImageView)
         view.addSubview(filmstripView)
+        view.addSubview(presetPickerView)
         view.addSubview(controlsView)
         view.addSubview(progressOverlayView)
 
@@ -252,9 +266,15 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
-        filmstripView.snp.makeConstraints { make in
+        presetPickerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(controlsView.snp.top)
+            make.height.equalTo(58)
+        }
+
+        filmstripView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(presetPickerView.snp.top)
             make.height.equalTo(photos.count > 1 ? 68 : 0)
         }
 
@@ -386,6 +406,15 @@ final class EditorViewController: UIViewController {
         filmstripView.onPhotoSelected = { [weak self] index in
             self?.showPhoto(at: index)
         }
+
+        presetPickerView.onPresetSelected = { [weak self] preset in
+            guard let self else { return }
+            selectedPreset = preset
+        }
+    }
+
+    private func effectiveRecipe(for baseRecipe: EditRecipe) -> EditRecipe {
+        selectedPreset.applying(to: baseRecipe)
     }
 
     private func showPhoto(at index: Int) {
@@ -465,6 +494,7 @@ final class EditorViewController: UIViewController {
 
     private func setPhotoLoading(_ isLoading: Bool) {
         controlsView.isUserInteractionEnabled = !isLoading
+        presetPickerView.isUserInteractionEnabled = !isLoading
 
         navigationItem.rightBarButtonItems?.forEach {
             $0.isEnabled = !isLoading
@@ -652,6 +682,7 @@ final class EditorViewController: UIViewController {
 
         controlsView.isUserInteractionEnabled = !isApplying
         filmstripView.isUserInteractionEnabled = !isApplying
+        presetPickerView.isUserInteractionEnabled = !isApplying
         editorImageView.isUserInteractionEnabled = !isApplying
 
         if isApplying {
@@ -716,7 +747,9 @@ final class EditorViewController: UIViewController {
     private func scheduleRenderPreview() {
         previewRenderRequest?.cancel()
 
-        guard !recipe.isNeutral else {
+        let currentRecipe = effectiveRecipe(for: recipe)
+
+        guard !currentRecipe.isNeutral else {
             previewRenderRequest = nil
             renderedPreviewImage = nil
 
@@ -727,7 +760,6 @@ final class EditorViewController: UIViewController {
             return
         }
 
-        let currentRecipe = recipe
         let inputImage = previewCIImage
         let pipeline = filterPipeline
 
@@ -744,8 +776,11 @@ final class EditorViewController: UIViewController {
                     guard previewRenderRequest?.id == renderID else { return }
                     guard previewRenderRequest?.isCancelled == false else { return }
                     guard let renderedImage else { return }
+
                     renderedPreviewImage = renderedImage
+
                     guard !isShowingOriginal else { return }
+
                     editorImageView.image = renderedImage
                 }
             }
@@ -825,17 +860,18 @@ final class EditorViewController: UIViewController {
     }
 
     @MainActor
-    private func setExporting(
-        _ isExporting: Bool,
-        totalCount: Int = 0
-    ) {
+    private func setExporting(_ isExporting: Bool, totalCount: Int = 0) {
         self.isExporting = isExporting
 
-        navigationItem.rightBarButtonItems?.forEach { $0.isEnabled = !isExporting }
+        navigationItem.rightBarButtonItems?.forEach {
+            $0.isEnabled = !isExporting
+        }
+
         navigationItem.hidesBackButton = isExporting
 
         controlsView.isUserInteractionEnabled = !isExporting
         filmstripView.isUserInteractionEnabled = !isExporting
+        presetPickerView.isUserInteractionEnabled = !isExporting
         editorImageView.isUserInteractionEnabled = !isExporting
 
         if isExporting {
@@ -844,11 +880,12 @@ final class EditorViewController: UIViewController {
                 : "Preparing \(totalCount) photos…"
 
             progressOverlayView.isHidden = false
-            activityIndicator.startAnimating()
 
+            activityIndicator.startAnimating()
             view.bringSubviewToFront(progressOverlayView)
         } else {
             activityIndicator.stopAnimating()
+
             progressOverlayView.isHidden = true
             progressLabel.text = nil
         }
@@ -901,20 +938,20 @@ final class EditorViewController: UIViewController {
         )
     }
 
-    private func renderFullSize(
-        photo: EditablePhoto
-    ) async -> UIImage? {
+    private func renderFullSize(photo: EditablePhoto) async -> UIImage? {
         let pipeline = filterPipeline
         let queue = exportQueue
+        let recipe = effectiveRecipe(for: photo.recipe)
 
         return await withCheckedContinuation { continuation in
             queue.async {
                 let renderedImage = autoreleasepool {
                     pipeline.renderFullSize(
                         image: photo.originalImage,
-                        recipe: photo.recipe
+                        recipe: recipe
                     )
                 }
+
                 continuation.resume(returning: renderedImage)
             }
         }
@@ -922,28 +959,36 @@ final class EditorViewController: UIViewController {
 
     private func scheduleCollectionSave() {
         let storedPhotos = photos.map(\.storedPhoto)
+        let selectedPresetID = selectedPreset.rawValue
+
         collectionSaveTask?.cancel()
 
-        collectionSaveTask = Task { [collectionStorageService, collectionID] in
+        collectionSaveTask = Task {
+            [collectionStorageService, collectionID, selectedPresetID] in
+
             try? await Task.sleep(nanoseconds: 600_000_000)
 
             guard !Task.isCancelled else { return }
 
             try? await collectionStorageService.updateCollection(
                 id: collectionID,
-                photos: storedPhotos
+                photos: storedPhotos,
+                selectedPresetID: selectedPresetID
             )
         }
     }
 
     private func saveCollectionImmediately() {
         collectionSaveTask?.cancel()
-        let storedPhotos = photos.map(\.storedPhoto)
 
-        Task { [collectionStorageService, collectionID] in
+        let storedPhotos = photos.map(\.storedPhoto)
+        let selectedPresetID = selectedPreset.rawValue
+
+        Task { [collectionStorageService, collectionID, selectedPresetID] in
             try? await collectionStorageService.updateCollection(
                 id: collectionID,
-                photos: storedPhotos
+                photos: storedPhotos,
+                selectedPresetID: selectedPresetID
             )
         }
     }
