@@ -53,11 +53,10 @@ final class PhotoExportService {
         image: UIImage,
         compressionQuality: CGFloat = 0.95
     ) async throws {
-        guard let jpegData = image.jpegData(
+        let jpegData = try await makeJPEGData(
+            from: image,
             compressionQuality: compressionQuality
-        ) else {
-            throw PhotoExportError.jpegDataCreationFailed
-        }
+        )
 
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
@@ -80,6 +79,23 @@ final class PhotoExportService {
                         throwing: PhotoExportError.jpegDataCreationFailed
                     )
                 }
+            }
+        }
+    }
+
+    private func makeJPEGData(
+        from image: UIImage,
+        compressionQuality: CGFloat
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let jpegData = image.jpegData(
+                    compressionQuality: compressionQuality
+                ) else {
+                    continuation.resume(throwing: PhotoExportError.jpegDataCreationFailed)
+                    return
+                }
+                continuation.resume(returning: jpegData)
             }
         }
     }

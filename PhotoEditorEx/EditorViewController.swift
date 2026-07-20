@@ -47,6 +47,14 @@ final class EditorViewController: UIViewController {
     )
     private var isExporting = false
 
+    private let exportOverlayView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        view.layer.cornerRadius = 14
+        view.isHidden = true
+        return view
+    }()
+
     private let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.hidesWhenStopped = true
@@ -56,9 +64,9 @@ final class EditorViewController: UIViewController {
     private let exportProgressLabel: UILabel = {
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .subheadline)
-        label.textColor = .secondaryLabel
+        label.textColor = .label
         label.textAlignment = .center
-        label.isHidden = true
+        label.numberOfLines = 0
         return label
     }()
 
@@ -203,8 +211,10 @@ final class EditorViewController: UIViewController {
         view.addSubview(editorImageView)
         view.addSubview(filmstripView)
         view.addSubview(controlsView)
-        view.addSubview(activityIndicator)
-        view.addSubview(exportProgressLabel)
+        view.addSubview(exportOverlayView)
+
+        exportOverlayView.addSubview(activityIndicator)
+        exportOverlayView.addSubview(exportProgressLabel)
 
         controlsView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
@@ -223,14 +233,21 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(filmstripView.snp.top)
         }
 
+        exportOverlayView.snp.makeConstraints { make in
+            make.center.equalTo(editorImageView)
+            make.width.greaterThanOrEqualTo(190)
+            make.width.lessThanOrEqualToSuperview().inset(32)
+        }
+
         activityIndicator.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(20)
             make.centerX.equalToSuperview()
-            make.centerY.equalToSuperview().offset(-12)
         }
 
         exportProgressLabel.snp.makeConstraints { make in
-            make.top.equalTo(activityIndicator.snp.bottom).offset(8)
-            make.leading.trailing.equalToSuperview().inset(24)
+            make.top.equalTo(activityIndicator.snp.bottom).offset(12)
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.bottom.equalToSuperview().inset(20)
         }
 
         filmstripView.isHidden = photos.count <= 1
@@ -580,7 +597,7 @@ final class EditorViewController: UIViewController {
 
         setExporting(true, totalCount: photosToExport.count)
 
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
 
             do {
@@ -627,6 +644,7 @@ final class EditorViewController: UIViewController {
         }
     }
 
+    @MainActor
     private func setExporting(
         _ isExporting: Bool,
         totalCount: Int = 0
@@ -645,26 +663,28 @@ final class EditorViewController: UIViewController {
                 ? "Exporting photo…"
                 : "Preparing \(totalCount) photos…"
 
-            exportProgressLabel.isHidden = false
+            exportOverlayView.isHidden = false
             activityIndicator.startAnimating()
+
+            view.bringSubviewToFront(exportOverlayView)
         } else {
-            exportProgressLabel.isHidden = true
-            exportProgressLabel.text = nil
             activityIndicator.stopAnimating()
+            exportOverlayView.isHidden = true
+            exportProgressLabel.text = nil
         }
     }
 
+    @MainActor
     private func updateExportProgress(
         current: Int,
         total: Int
     ) {
-        if total == 1 {
-            exportProgressLabel.text = "Exporting photo…"
-        } else {
-            exportProgressLabel.text = "Exporting \(current) of \(total)"
-        }
+        exportProgressLabel.text = total == 1
+            ? "Exporting photo…"
+            : "Exporting \(current) of \(total)"
     }
 
+    @MainActor
     private func showExportResult(
         exportedCount: Int,
         failedCount: Int,
@@ -723,6 +743,7 @@ final class EditorViewController: UIViewController {
         }
     }
 
+    @MainActor
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(
             title: title,
