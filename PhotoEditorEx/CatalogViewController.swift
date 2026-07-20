@@ -29,8 +29,11 @@ final class CatalogViewController: UIViewController {
     }()
 
     private let tableView: UITableView = {
-        let tableView = UITableView(frame: .zero, style: .insetGrouped)
-        tableView.rowHeight = 76
+        let tableView = UITableView(frame: .zero, style: .plain)
+        tableView.rowHeight = 84
+        tableView.separatorStyle = .none
+        tableView.backgroundColor = .systemGroupedBackground
+        tableView.contentInset.top = 12
         return tableView
     }()
 
@@ -441,10 +444,20 @@ private final class PhotoCollectionCell: UITableViewCell {
 
     static let reuseIdentifier = "PhotoCollectionCell"
 
+    private let cardView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .secondarySystemGroupedBackground
+        view.layer.cornerRadius = 12
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
+        return view
+    }()
+
     private let thumbnailContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = .tertiarySystemGroupedBackground
         view.layer.cornerRadius = 8
+        view.layer.cornerCurve = .continuous
         view.clipsToBounds = true
         return view
     }()
@@ -470,10 +483,19 @@ private final class PhotoCollectionCell: UITableViewCell {
         return label
     }()
 
+    private let chevronImageView: UIImageView = {
+        let imageView = UIImageView(image: UIImage(systemName: "chevron.right"))
+        imageView.tintColor = .tertiaryLabel
+        imageView.contentMode = .scaleAspectFit
+        return imageView
+    }()
+
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
 
-        accessoryType = .disclosureIndicator
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        selectionStyle = .none
 
         setupLayout()
     }
@@ -506,10 +528,18 @@ private final class PhotoCollectionCell: UITableViewCell {
         labelsStackView.axis = .vertical
         labelsStackView.spacing = 3
 
-        contentView.addSubview(thumbnailContainerView)
-        contentView.addSubview(labelsStackView)
+        contentView.addSubview(cardView)
+
+        cardView.addSubview(thumbnailContainerView)
+        cardView.addSubview(labelsStackView)
+        cardView.addSubview(chevronImageView)
 
         thumbnailContainerView.addSubview(thumbnailImageView)
+
+        cardView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(16)
+            make.top.bottom.equalToSuperview().inset(4)
+        }
 
         thumbnailContainerView.snp.makeConstraints { make in
             make.leading.equalToSuperview().offset(12)
@@ -521,9 +551,16 @@ private final class PhotoCollectionCell: UITableViewCell {
             make.edges.equalToSuperview()
         }
 
+        chevronImageView.snp.makeConstraints { make in
+            make.trailing.equalToSuperview().inset(14)
+            make.centerY.equalToSuperview()
+            make.width.equalTo(8)
+            make.height.equalTo(14)
+        }
+
         labelsStackView.snp.makeConstraints { make in
             make.leading.equalTo(thumbnailContainerView.snp.trailing).offset(12)
-            make.trailing.lessThanOrEqualToSuperview().inset(8)
+            make.trailing.lessThanOrEqualTo(chevronImageView.snp.leading).offset(-12)
             make.centerY.equalToSuperview()
         }
     }
