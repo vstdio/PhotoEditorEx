@@ -9,13 +9,19 @@ import UIKit
 import Photos
 
 enum PhotoExportError: LocalizedError {
+
+    case renderFailed
     case jpegDataCreationFailed
     case accessDenied
 
     var errorDescription: String? {
         switch self {
+        case .renderFailed:
+            return "Не удалось обработать изображение."
+
         case .jpegDataCreationFailed:
             return "Не удалось создать JPEG-файл."
+
         case .accessDenied:
             return "Нет доступа для сохранения фото в галерею."
         }
@@ -24,42 +30,55 @@ enum PhotoExportError: LocalizedError {
 
 final class PhotoExportService {
 
-    func saveToPhotoLibrary(
-        image: UIImage,
-        compressionQuality: CGFloat = 0.95,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        guard let jpegData = image.jpegData(compressionQuality: compressionQuality) else {
-            completion(.failure(PhotoExportError.jpegDataCreationFailed))
-            return
+    func requestAddOnlyAccess() async throws {
+        let status = await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                continuation.resume(returning: status)
+            }
         }
 
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            switch status {
-            case .authorized, .limited:
-                PHPhotoLibrary.shared().performChanges {
-                    let request = PHAssetCreationRequest.forAsset()
-                    request.addResource(with: .photo, data: jpegData, options: nil)
-                } completionHandler: { success, error in
-                    DispatchQueue.main.async {
-                        if let error {
-                            completion(.failure(error))
-                        } else if success {
-                            completion(.success(()))
-                        } else {
-                            completion(.failure(PhotoExportError.jpegDataCreationFailed))
-                        }
-                    }
-                }
+        switch status {
+        case .authorized, .limited:
+            return
 
-            case .denied, .restricted, .notDetermined:
-                DispatchQueue.main.async {
-                    completion(.failure(PhotoExportError.accessDenied))
-                }
+        case .denied, .restricted, .notDetermined:
+            throw PhotoExportError.accessDenied
 
-            @unknown default:
-                DispatchQueue.main.async {
-                    completion(.failure(PhotoExportError.accessDenied))
+        @unknown default:
+            throw PhotoExportError.accessDenied
+        }
+    }
+
+    func saveToPhotoLibrary(
+        image: UIImage,
+        compressionQuality: CGFloat = 0.95
+    ) async throws {
+        guard let jpegData = image.jpegData(
+            compressionQuality: compressionQuality
+        ) else {
+            throw PhotoExportError.jpegDataCreationFailed
+        }
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+
+            PHPhotoLibrary.shared().performChanges {
+                let request = PHAssetCreationRequest.forAsset()
+
+                request.addResource(
+                    with: .photo,
+                    data: jpegData,
+                    options: nil
+                )
+            } completionHandler: { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(
+                        throwing: PhotoExportError.jpegDataCreationFailed
+                    )
                 }
             }
         }

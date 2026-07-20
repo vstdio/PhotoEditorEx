@@ -41,12 +41,25 @@ final class EditorViewController: UIViewController {
     private var previewRenderRequest: PreviewRenderRequest?
 
     private let exportService = PhotoExportService()
-    private let exportQueue = DispatchQueue(label: "PhotoLab.editor.export", qos: .userInitiated)
+    private let exportQueue = DispatchQueue(
+        label: "PhotoLab.editor.export",
+        qos: .userInitiated
+    )
+    private var isExporting = false
 
     private let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.hidesWhenStopped = true
         return indicator
+    }()
+
+    private let exportProgressLabel: UILabel = {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.isHidden = true
+        return label
     }()
 
     private var recipe: EditRecipe = .neutral {
@@ -151,9 +164,38 @@ final class EditorViewController: UIViewController {
     private func setupNavigationBar() {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             title: "Export",
-            style: .done,
-            target: self,
-            action: #selector(exportButtonTapped)
+            image: nil,
+            primaryAction: nil,
+            menu: makeExportMenu()
+        )
+    }
+
+    private func makeExportMenu() -> UIMenu {
+        let exportCurrentAction = UIAction(
+            title: "Export Current",
+            image: UIImage(systemName: "photo")
+        ) { [weak self] _ in
+            self?.exportCurrentPhoto()
+        }
+
+        let exportAllAttributes: UIMenuElement.Attributes = photos.count > 1
+            ? []
+            : [.disabled]
+
+        let exportAllAction = UIAction(
+            title: "Export All (\(photos.count))",
+            image: UIImage(systemName: "photo.stack"),
+            attributes: exportAllAttributes
+        ) { [weak self] _ in
+            self?.exportAllPhotos()
+        }
+
+        return UIMenu(
+            title: "",
+            children: [
+                exportCurrentAction,
+                exportAllAction
+            ]
         )
     }
 
@@ -162,6 +204,7 @@ final class EditorViewController: UIViewController {
         view.addSubview(filmstripView)
         view.addSubview(controlsView)
         view.addSubview(activityIndicator)
+        view.addSubview(exportProgressLabel)
 
         controlsView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
@@ -181,7 +224,13 @@ final class EditorViewController: UIViewController {
         }
 
         activityIndicator.snp.makeConstraints { make in
-            make.center.equalTo(editorImageView)
+            make.centerX.equalToSuperview()
+            make.centerY.equalToSuperview().offset(-12)
+        }
+
+        exportProgressLabel.snp.makeConstraints { make in
+            make.top.equalTo(activityIndicator.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview().inset(24)
         }
 
         filmstripView.isHidden = photos.count <= 1
@@ -510,57 +559,167 @@ final class EditorViewController: UIViewController {
         renderQueue.async(execute: request.workItem)
     }
 
-    @objc private func exportButtonTapped() {
-        setExporting(true)
+    private func exportCurrentPhoto() {
+        guard photos.indices.contains(currentPhotoIndex) else { return }
+        photos[currentPhotoIndex].recipe = recipe
+        startExport(photosToExport: [photos[currentPhotoIndex]])
+    }
 
-        let currentRecipe = recipe
-        let image = originalImage
-        let pipeline = filterPipeline
-        let exportService = exportService
+    private func exportAllPhotos() {
+        guard !photos.isEmpty else { return }
+        guard photos.indices.contains(currentPhotoIndex) else { return }
+        photos[currentPhotoIndex].recipe = recipe
+        startExport(photosToExport: photos)
+    }
 
-        exportQueue.async { [weak self] in
-            guard let renderedImage = pipeline.renderFullSize(
-                image: image,
-                recipe: currentRecipe
-            ) else {
-                DispatchQueue.main.async {
-                    self?.setExporting(false)
-                    self?.showAlert(
-                        title: "Ошибка",
-                        message: "Не удалось отрендерить изображение."
-                    )
-                }
+    private func startExport(
+        photosToExport: [EditablePhoto]
+    ) {
+        guard !isExporting else { return }
+        guard !photosToExport.isEmpty else { return }
+
+        setExporting(true, totalCount: photosToExport.count)
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                try await exportService.requestAddOnlyAccess()
+            } catch {
+                setExporting(false)
+                showAlert(title: "Ошибка экспорта", message: error.localizedDescription)
                 return
             }
 
-            exportService.saveToPhotoLibrary(image: renderedImage) { [weak self] result in
-                self?.setExporting(false)
+            var exportedCount = 0
+            var failedCount = 0
+            var lastError: Error?
 
-                switch result {
-                case .success:
-                    self?.showAlert(
-                        title: "Готово",
-                        message: "Фото сохранено в галерею."
-                    )
+            for (index, photo) in photosToExport.enumerated() {
+                updateExportProgress(
+                    current: index + 1,
+                    total: photosToExport.count
+                )
 
-                case .failure(let error):
-                    self?.showAlert(
-                        title: "Ошибка экспорта",
-                        message: error.localizedDescription
-                    )
+                guard let renderedImage = await renderFullSize(photo: photo) else {
+                    failedCount += 1
+                    lastError = PhotoExportError.renderFailed
+                    continue
+                }
+
+                do {
+                    try await exportService.saveToPhotoLibrary(image: renderedImage)
+                    exportedCount += 1
+                } catch {
+                    failedCount += 1
+                    lastError = error
                 }
             }
+
+            setExporting(false)
+
+            showExportResult(
+                exportedCount: exportedCount,
+                failedCount: failedCount,
+                totalCount: photosToExport.count,
+                lastError: lastError
+            )
         }
     }
 
-    private func setExporting(_ isExporting: Bool) {
+    private func setExporting(
+        _ isExporting: Bool,
+        totalCount: Int = 0
+    ) {
+        self.isExporting = isExporting
+
         navigationItem.rightBarButtonItem?.isEnabled = !isExporting
+        navigationItem.hidesBackButton = isExporting
+
         controlsView.isUserInteractionEnabled = !isExporting
+        filmstripView.isUserInteractionEnabled = !isExporting
+        editorImageView.isUserInteractionEnabled = !isExporting
 
         if isExporting {
+            exportProgressLabel.text = totalCount == 1
+                ? "Exporting photo…"
+                : "Preparing \(totalCount) photos…"
+
+            exportProgressLabel.isHidden = false
             activityIndicator.startAnimating()
         } else {
+            exportProgressLabel.isHidden = true
+            exportProgressLabel.text = nil
             activityIndicator.stopAnimating()
+        }
+    }
+
+    private func updateExportProgress(
+        current: Int,
+        total: Int
+    ) {
+        if total == 1 {
+            exportProgressLabel.text = "Exporting photo…"
+        } else {
+            exportProgressLabel.text = "Exporting \(current) of \(total)"
+        }
+    }
+
+    private func showExportResult(
+        exportedCount: Int,
+        failedCount: Int,
+        totalCount: Int,
+        lastError: Error?
+    ) {
+        if exportedCount == totalCount {
+            let message: String
+
+            if totalCount == 1 {
+                message = "Фото сохранено в галерею."
+            } else {
+                message = "\(exportedCount) photos saved to the gallery."
+            }
+
+            showAlert(title: "Готово", message: message)
+            return
+        }
+
+        if exportedCount == 0 {
+            showAlert(
+                title: "Ошибка экспорта",
+                message: lastError?.localizedDescription
+                    ?? "Не удалось экспортировать фотографии."
+            )
+            return
+        }
+
+        showAlert(
+            title: "Экспорт завершен",
+            message:
+                "\(exportedCount) of \(totalCount) photos exported. "
+                + "\(failedCount) failed."
+        )
+    }
+
+    private func renderFullSize(
+        photo: EditablePhoto
+    ) async -> UIImage? {
+        let pipeline = filterPipeline
+        let queue = exportQueue
+
+        return await withCheckedContinuation { continuation in
+            queue.async {
+                let renderedImage = autoreleasepool {
+                    pipeline.renderFullSize(
+                        image: photo.originalImage,
+                        recipe: photo.recipe
+                    )
+                }
+
+                continuation.resume(
+                    returning: renderedImage
+                )
+            }
         }
     }
 
