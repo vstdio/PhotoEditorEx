@@ -72,19 +72,11 @@ final class EditorViewController: UIViewController {
 
     private var recipe: EditRecipe = .neutral {
         didSet {
-            guard photos.indices.contains(currentPhotoIndex) else {
-                return
-            }
-
+            guard photos.indices.contains(currentPhotoIndex) else { return }
             photos[currentPhotoIndex].recipe = recipe
 
-            guard oldValue != recipe else {
-                return
-            }
-
-            guard !isApplyingPhotoState else {
-                return
-            }
+            guard oldValue != recipe else { return }
+            guard !isApplyingPhotoState else { return }
 
             scheduleRenderPreview()
         }
@@ -396,20 +388,11 @@ final class EditorViewController: UIViewController {
             let previewCIImage = CIImage(image: previewImage) ?? CIImage()
 
             DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                guard photoSwitchRequestID == requestID else {
-                    return
-                }
-
-                guard currentPhotoIndex == index else {
-                    return
-                }
+                guard let self else { return }
+                guard photoSwitchRequestID == requestID else { return }
+                guard currentPhotoIndex == index else { return }
 
                 photoSwitchRequestID = nil
-
                 originalImage = photo.originalImage
                 self.previewImage = previewImage
                 self.previewCIImage = previewCIImage
@@ -735,10 +718,7 @@ final class EditorViewController: UIViewController {
                         recipe: photo.recipe
                     )
                 }
-
-                continuation.resume(
-                    returning: renderedImage
-                )
+                continuation.resume(returning: renderedImage)
             }
         }
     }
