@@ -46,8 +46,9 @@ final class EditorViewController: UIViewController {
         qos: .userInitiated
     )
     private var isExporting = false
+    private var isApplyingAutoToAll = false
 
-    private let exportOverlayView: UIView = {
+    private let progressOverlayView: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
         view.layer.cornerRadius = 14
@@ -61,7 +62,7 @@ final class EditorViewController: UIViewController {
         return indicator
     }()
 
-    private let exportProgressLabel: UILabel = {
+    private let progressLabel: UILabel = {
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.textColor = .label
@@ -162,12 +163,23 @@ final class EditorViewController: UIViewController {
     }
 
     private func setupNavigationBar() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let exportItem = UIBarButtonItem(
             title: "Export",
             image: nil,
             primaryAction: nil,
             menu: makeExportMenu()
         )
+
+        let actionsItem = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            primaryAction: nil,
+            menu: makeBatchActionsMenu()
+        )
+
+        navigationItem.rightBarButtonItems = [
+            exportItem,
+            actionsItem
+        ]
     }
 
     private func makeExportMenu() -> UIMenu {
@@ -199,14 +211,32 @@ final class EditorViewController: UIViewController {
         )
     }
 
+    private func makeBatchActionsMenu() -> UIMenu {
+        let autoAllAttributes: UIMenuElement.Attributes = photos.count > 1
+            ? []
+            : [.disabled]
+
+        let autoAllAction = UIAction(
+            title: "Auto All (\(photos.count))",
+            image: UIImage(systemName: "wand.and.stars"),
+            attributes: autoAllAttributes
+        ) { [weak self] _ in
+            self?.applyAutoToAllPhotos()
+        }
+
+        return UIMenu(children: [
+            autoAllAction
+        ])
+    }
+
     private func setupLayout() {
         view.addSubview(editorImageView)
         view.addSubview(filmstripView)
         view.addSubview(controlsView)
-        view.addSubview(exportOverlayView)
+        view.addSubview(progressOverlayView)
 
-        exportOverlayView.addSubview(activityIndicator)
-        exportOverlayView.addSubview(exportProgressLabel)
+        progressOverlayView.addSubview(activityIndicator)
+        progressOverlayView.addSubview(progressLabel)
 
         controlsView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
@@ -225,7 +255,7 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(filmstripView.snp.top)
         }
 
-        exportOverlayView.snp.makeConstraints { make in
+        progressOverlayView.snp.makeConstraints { make in
             make.center.equalTo(editorImageView)
             make.width.greaterThanOrEqualTo(190)
             make.width.lessThanOrEqualToSuperview().inset(32)
@@ -236,7 +266,7 @@ final class EditorViewController: UIViewController {
             make.centerX.equalToSuperview()
         }
 
-        exportProgressLabel.snp.makeConstraints { make in
+        progressLabel.snp.makeConstraints { make in
             make.top.equalTo(activityIndicator.snp.bottom).offset(12)
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalToSuperview().inset(20)
@@ -426,12 +456,22 @@ final class EditorViewController: UIViewController {
 
     private func setPhotoLoading(_ isLoading: Bool) {
         controlsView.isUserInteractionEnabled = !isLoading
-        navigationItem.rightBarButtonItem?.isEnabled = !isLoading
+
+        navigationItem.rightBarButtonItems?.forEach {
+            $0.isEnabled = !isLoading
+        }
 
         if isLoading {
+            progressLabel.text = "Loading photo…"
+            progressOverlayView.isHidden = false
+
             activityIndicator.startAnimating()
+            view.bringSubviewToFront(progressOverlayView)
         } else {
             activityIndicator.stopAnimating()
+
+            progressOverlayView.isHidden = true
+            progressLabel.text = nil
         }
     }
 
@@ -498,6 +538,151 @@ final class EditorViewController: UIViewController {
                 recipe = autoRecipe
             }
         }
+    }
+
+    private func applyAutoToAllPhotos() {
+        guard photos.count > 1 else { return }
+        guard !isExporting, !isApplyingAutoToAll else { return }
+
+        if autoRequestID != nil {
+            autoRequestID = nil
+            setRecipeBeforeAuto(nil)
+            controlsView.setAutoEnabled(false)
+        }
+
+        let photosSnapshot = photos
+
+        setApplyingAutoToAll(true, totalCount: photosSnapshot.count)
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            var updatedPhotos = photosSnapshot
+            var appliedCount = 0
+            var skippedCount = 0
+
+            for index in updatedPhotos.indices {
+                updateAutoForAllProgress(current: index + 1, total: updatedPhotos.count)
+
+                let photo = updatedPhotos[index]
+
+                guard photo.recipeBeforeAuto == nil else {
+                    skippedCount += 1
+                    continue
+                }
+
+                let autoRecipe = await makeAutoRecipe(
+                    for: photo.originalImage,
+                    baseRecipe: photo.recipe
+                )
+
+                updatedPhotos[index].recipeBeforeAuto = photo.recipe
+                updatedPhotos[index].recipe = autoRecipe
+                appliedCount += 1
+            }
+
+            photos = updatedPhotos
+
+            applyCurrentPhotoStateAfterAutoForAll()
+            setApplyingAutoToAll(false)
+
+            showAutoForAllResult(
+                appliedCount: appliedCount,
+                skippedCount: skippedCount
+            )
+        }
+    }
+
+    private func makeAutoRecipe(for image: UIImage, baseRecipe: EditRecipe) async -> EditRecipe {
+        let service = autoAdjustmentService
+
+        return await withCheckedContinuation { continuation in
+            autoQueue.async {
+                let autoRecipe = autoreleasepool {
+                    let previewImage = image.resizedForEditorPreview(maxPixelSize: 1200)
+                    let inputImage = CIImage(image: previewImage) ?? CIImage()
+
+                    return service.makeRecipe(
+                        for: inputImage,
+                        baseRecipe: baseRecipe
+                    )
+                }
+
+                continuation.resume(returning: autoRecipe)
+            }
+        }
+    }
+
+    @MainActor
+    private func applyCurrentPhotoStateAfterAutoForAll() {
+        guard photos.indices.contains(currentPhotoIndex) else { return }
+
+        let currentPhoto = photos[currentPhotoIndex]
+
+        recipeBeforeAuto = currentPhoto.recipeBeforeAuto
+        renderedPreviewImage = nil
+        isShowingOriginal = false
+
+        controlsView.setAutoEnabled(currentPhoto.recipeBeforeAuto != nil)
+        controlsView.setRecipe(currentPhoto.recipe, animated: true)
+
+        recipe = currentPhoto.recipe
+    }
+
+    @MainActor
+    private func setApplyingAutoToAll(_ isApplying: Bool, totalCount: Int = 0) {
+        isApplyingAutoToAll = isApplying
+
+        navigationItem.rightBarButtonItems?.forEach {
+            $0.isEnabled = !isApplying
+        }
+
+        navigationItem.hidesBackButton = isApplying
+
+        controlsView.isUserInteractionEnabled = !isApplying
+        filmstripView.isUserInteractionEnabled = !isApplying
+        editorImageView.isUserInteractionEnabled = !isApplying
+
+        if isApplying {
+            progressLabel.text = "Preparing Auto for \(totalCount) photos…"
+            progressOverlayView.isHidden = false
+
+            activityIndicator.startAnimating()
+            view.bringSubviewToFront(progressOverlayView)
+        } else {
+            activityIndicator.stopAnimating()
+
+            progressOverlayView.isHidden = true
+            progressLabel.text = nil
+        }
+    }
+
+    @MainActor
+    private func showAutoForAllResult(appliedCount: Int, skippedCount: Int) {
+        if appliedCount == 0 {
+            showAlert(
+                title: "Auto",
+                message: "All photos already have Auto enabled."
+            )
+
+            return
+        }
+
+        var message = "Auto was applied to \(appliedCount) photos."
+
+        if skippedCount > 0 {
+            message += " \(skippedCount) photos already had Auto and were left unchanged."
+        }
+
+        showAlert(
+            title: "Auto Complete",
+            message: message
+        )
+    }
+
+    @MainActor
+    private func updateAutoForAllProgress(current: Int, total: Int) {
+        progressLabel.text = "Applying Auto \(current) of \(total)"
     }
 
     private func restoreRecipeBeforeAuto() {
@@ -576,6 +761,7 @@ final class EditorViewController: UIViewController {
         photosToExport: [EditablePhoto]
     ) {
         guard !isExporting else { return }
+        guard !isApplyingAutoToAll else { return }
         guard !photosToExport.isEmpty else { return }
 
         setExporting(true, totalCount: photosToExport.count)
@@ -634,7 +820,7 @@ final class EditorViewController: UIViewController {
     ) {
         self.isExporting = isExporting
 
-        navigationItem.rightBarButtonItem?.isEnabled = !isExporting
+        navigationItem.rightBarButtonItems?.forEach { $0.isEnabled = !isExporting }
         navigationItem.hidesBackButton = isExporting
 
         controlsView.isUserInteractionEnabled = !isExporting
@@ -642,18 +828,18 @@ final class EditorViewController: UIViewController {
         editorImageView.isUserInteractionEnabled = !isExporting
 
         if isExporting {
-            exportProgressLabel.text = totalCount == 1
+            progressLabel.text = totalCount == 1
                 ? "Exporting photo…"
                 : "Preparing \(totalCount) photos…"
 
-            exportOverlayView.isHidden = false
+            progressOverlayView.isHidden = false
             activityIndicator.startAnimating()
 
-            view.bringSubviewToFront(exportOverlayView)
+            view.bringSubviewToFront(progressOverlayView)
         } else {
             activityIndicator.stopAnimating()
-            exportOverlayView.isHidden = true
-            exportProgressLabel.text = nil
+            progressOverlayView.isHidden = true
+            progressLabel.text = nil
         }
     }
 
@@ -662,7 +848,7 @@ final class EditorViewController: UIViewController {
         current: Int,
         total: Int
     ) {
-        exportProgressLabel.text = total == 1
+        progressLabel.text = total == 1
             ? "Exporting photo…"
             : "Exporting \(current) of \(total)"
     }
