@@ -168,6 +168,7 @@ final class EditorViewController: UIViewController {
         setupNavigationBar()
         setupLayout()
         setupActions()
+        setupContainerAppearance()
         setEditorMode(.styles, animated: false)
         setupBeforeAfterGesture()
 
@@ -281,6 +282,9 @@ final class EditorViewController: UIViewController {
         bottomPanelContainerView.addArrangedSubview(actionBarView)
         bottomPanelContainerView.addArrangedSubview(controlsView)
 
+        bottomPanelContainerView.setCustomSpacing(8, after: presetPickerView)
+        bottomPanelContainerView.setCustomSpacing(8, after: actionBarView)
+
         progressOverlayView.addSubview(activityIndicator)
         progressOverlayView.addSubview(progressLabel)
 
@@ -294,7 +298,7 @@ final class EditorViewController: UIViewController {
         }
 
         actionBarView.snp.makeConstraints { make in
-            make.height.equalTo(56)
+            make.height.equalTo(48)
         }
 
         filmstripView.snp.makeConstraints { make in
@@ -441,13 +445,8 @@ final class EditorViewController: UIViewController {
     }
 
     private func showPhoto(at index: Int) {
-        guard photos.indices.contains(index) else {
-            return
-        }
-
-        guard index != currentPhotoIndex else {
-            return
-        }
+        guard photos.indices.contains(index) else { return }
+        guard index != currentPhotoIndex else { return }
 
         previewRenderRequest?.cancel()
         previewRenderRequest = nil
@@ -456,19 +455,14 @@ final class EditorViewController: UIViewController {
         isShowingOriginal = false
 
         currentPhotoIndex = index
-
         updateTitle()
 
-        filmstripView.setSelectedIndex(
-            index,
-            animated: true
-        )
+        filmstripView.setSelectedIndex(index, animated: true)
 
         let requestID = UUID()
         photoSwitchRequestID = requestID
 
         let photo = photos[index]
-
         setPhotoLoading(true)
 
         renderQueue.async { [weak self] in
@@ -1057,6 +1051,20 @@ final class EditorViewController: UIViewController {
         default:
             break
         }
+    }
+
+    private func applySoftBlueContainerStyle(to view: UIView, cornerRadius: CGFloat) {
+        view.layer.cornerRadius = cornerRadius
+        view.layer.cornerCurve = .continuous
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.18).cgColor
+        view.clipsToBounds = true
+    }
+
+    private func setupContainerAppearance() {
+        applySoftBlueContainerStyle(to: editorImageView, cornerRadius: 16)
+        applySoftBlueContainerStyle(to: filmstripView, cornerRadius: 14)
+        applySoftBlueContainerStyle(to: presetPickerView, cornerRadius: 14)
     }
 }
 

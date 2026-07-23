@@ -20,56 +20,25 @@ final class EditorActionBarView: UIView {
         stackView.axis = .horizontal
         stackView.alignment = .fill
         stackView.distribution = .fill
-        stackView.spacing = 8
+        stackView.spacing = 0
 
         return stackView
     }()
 
-    private let autoButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        button.accessibilityLabel = "Auto"
-        button.accessibilityHint = "Toggles automatic image adjustments"
-
-        return button
-    }()
-
-    private let resetButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.bordered()
-        configuration.title = "Reset"
-        configuration.image = UIImage(systemName: "arrow.counterclockwise")
-        configuration.imagePadding = 6
-
-        button.configuration = configuration
-        button.accessibilityLabel = "Reset photo"
-
-        return button
-    }()
-
-    private let modeButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.plain()
-        configuration.title = "Adjust"
-        configuration.image = UIImage(systemName: "slider.horizontal.3")
-        configuration.imagePadding = 8
-
-        button.configuration = configuration
-        button.accessibilityLabel = "Adjust photo"
-
-        return button
-    }()
+    private let autoButton = UIButton(type: .system)
+    private let resetButton = UIButton(type: .system)
+    private let modeButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
 
         backgroundColor = .systemBackground
 
+        setupButtons()
         setupLayout()
         setupActions()
         updateAutoButtonAppearance()
+        setShowsAdjustments(false)
     }
 
     @available(*, unavailable)
@@ -83,20 +52,40 @@ final class EditorActionBarView: UIView {
     }
 
     func setShowsAdjustments(_ showsAdjustments: Bool) {
-        var configuration = modeButton.configuration ?? .plain()
+        modeButton.configuration = makeButtonConfiguration(
+            title: showsAdjustments ? "Styles" : "Adjust",
+            imageName: showsAdjustments ? "chevron.left" : "slider.horizontal.3",
+            color: .systemBlue
+        )
 
-        if showsAdjustments {
-            configuration.title = "Styles"
-            configuration.image = UIImage(systemName: "chevron.backward")
-            modeButton.accessibilityLabel = "Return to styles"
-        } else {
-            configuration.title = "Adjust"
-            configuration.image = UIImage(systemName: "slider.horizontal.3")
-            modeButton.accessibilityLabel = "Adjust photo"
+        modeButton.accessibilityLabel = showsAdjustments
+            ? "Return to styles"
+            : "Adjust photo"
+    }
+
+    private func setupButtons() {
+        resetButton.configuration = makeButtonConfiguration(
+            title: "Reset",
+            imageName: "arrow.counterclockwise",
+            color: .secondaryLabel
+        )
+
+        autoButton.accessibilityLabel = "Auto"
+        autoButton.accessibilityHint = "Toggles automatic image adjustments"
+
+        resetButton.accessibilityLabel = "Reset photo"
+
+        [autoButton, resetButton, modeButton].forEach { button in
+            button.configurationUpdateHandler = { button in
+                if !button.isEnabled {
+                    button.alpha = 0.35
+                } else if button.isHighlighted {
+                    button.alpha = 0.5
+                } else {
+                    button.alpha = 1
+                }
+            }
         }
-
-        configuration.imagePadding = 8
-        modeButton.configuration = configuration
     }
 
     private func setupLayout() {
@@ -107,14 +96,13 @@ final class EditorActionBarView: UIView {
         leftButtonsStackView.addArrangedSubview(resetButton)
 
         leftButtonsStackView.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(16)
-            make.centerY.equalToSuperview()
-            make.top.bottom.equalToSuperview().inset(6)
+            make.top.bottom.equalToSuperview().inset(4)
+            make.leading.equalToSuperview().offset(8)
         }
 
         modeButton.snp.makeConstraints { make in
-            make.trailing.equalToSuperview().inset(16)
-            make.centerY.equalToSuperview()
+            make.top.bottom.equalToSuperview().inset(4)
+            make.trailing.equalToSuperview().inset(8)
             make.leading.greaterThanOrEqualTo(leftButtonsStackView.snp.trailing).offset(16)
         }
 
@@ -129,19 +117,12 @@ final class EditorActionBarView: UIView {
     }
 
     private func updateAutoButtonAppearance() {
-        var configuration: UIButton.Configuration
+        autoButton.configuration = makeButtonConfiguration(
+            title: "Auto",
+            imageName: autoButton.isSelected ? "checkmark.circle.fill" : "wand.and.stars",
+            color: autoButton.isSelected ? .systemBlue : .label
+        )
 
-        if autoButton.isSelected {
-            configuration = .borderedProminent()
-        } else {
-            configuration = .bordered()
-        }
-
-        configuration.title = "Auto"
-        configuration.image = UIImage(systemName: "wand.and.stars")
-        configuration.imagePadding = 6
-
-        autoButton.configuration = configuration
         autoButton.accessibilityValue = autoButton.isSelected ? "On" : "Off"
 
         if autoButton.isSelected {
@@ -151,8 +132,36 @@ final class EditorActionBarView: UIView {
         }
     }
 
+    private func makeButtonConfiguration(
+        title: String,
+        imageName: String,
+        color: UIColor
+    ) -> UIButton.Configuration {
+        var configuration = UIButton.Configuration.plain()
+
+        configuration.title = title
+        configuration.image = UIImage(systemName: imageName)
+        configuration.imagePadding = 6
+        configuration.baseForegroundColor = color
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 0,
+            leading: 8,
+            bottom: 0,
+            trailing: 8
+        )
+
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attributes = $0
+            attributes.font = .systemFont(ofSize: 14, weight: .medium)
+            return attributes
+        }
+
+        return configuration
+    }
+
     @objc private func autoButtonTapped() {
         let isEnabled = !autoButton.isSelected
+
         setAutoEnabled(isEnabled)
         onAutoTapped?(isEnabled)
     }
