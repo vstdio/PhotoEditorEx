@@ -9,6 +9,11 @@ import UIKit
 import CoreImage
 import SnapKit
 
+private enum EditorMode {
+    case styles
+    case adjustments
+}
+
 final class EditorViewController: UIViewController {
 
     private let collectionID: UUID
@@ -26,7 +31,34 @@ final class EditorViewController: UIViewController {
     private var isApplyingPhotoState = false
 
     private let filmstripView = EditorFilmstripView()
+
+    private var editorMode: EditorMode = .styles
+
+    private let bottomPanelContainerView: UIStackView = {
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.distribution = .fill
+        stackView.spacing = 0
+        stackView.backgroundColor = .systemBackground
+        return stackView
+    }()
+
     private let presetPickerView = PresetPickerView()
+
+    private let modeSwitchButton: UIButton = {
+        let button = UIButton(type: .system)
+
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "Adjust"
+        configuration.image = UIImage(systemName: "slider.horizontal.3")
+        configuration.imagePadding = 8
+
+        button.configuration = configuration
+        button.accessibilityLabel = "Adjust photo"
+
+        return button
+    }()
 
     private var selectedPreset: PhotoPreset {
         didSet {
@@ -149,6 +181,7 @@ final class EditorViewController: UIViewController {
         setupNavigationBar()
         setupLayout()
         setupActions()
+        setEditorMode(.styles, animated: false)
         setupBeforeAfterGesture()
 
         presetPickerView.setSelectedPreset(selectedPreset, animated: false)
@@ -254,27 +287,32 @@ final class EditorViewController: UIViewController {
     private func setupLayout() {
         view.addSubview(editorImageView)
         view.addSubview(filmstripView)
-        view.addSubview(presetPickerView)
-        view.addSubview(controlsView)
+        view.addSubview(bottomPanelContainerView)
         view.addSubview(progressOverlayView)
+
+        bottomPanelContainerView.addArrangedSubview(presetPickerView)
+        bottomPanelContainerView.addArrangedSubview(modeSwitchButton)
+        bottomPanelContainerView.addArrangedSubview(controlsView)
 
         progressOverlayView.addSubview(activityIndicator)
         progressOverlayView.addSubview(progressLabel)
 
-        controlsView.snp.makeConstraints { make in
+        bottomPanelContainerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
         presetPickerView.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(controlsView.snp.top)
             make.height.equalTo(58)
+        }
+
+        modeSwitchButton.snp.makeConstraints { make in
+            make.height.equalTo(44)
         }
 
         filmstripView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(presetPickerView.snp.top)
+            make.bottom.equalTo(bottomPanelContainerView.snp.top)
             make.height.equalTo(photos.count > 1 ? 68 : 0)
         }
 
@@ -305,6 +343,12 @@ final class EditorViewController: UIViewController {
     }
 
     private func setupActions() {
+        modeSwitchButton.addTarget(
+            self,
+            action: #selector(modeSwitchButtonTapped),
+            for: .touchUpInside
+        )
+
         controlsView.onBrightnessChanged = { [weak self] value in
             self?.updateRecipeManually {
                 $0.brightness = value
@@ -1019,6 +1063,64 @@ final class EditorViewController: UIViewController {
 
         default:
             break
+        }
+    }
+}
+
+extension EditorViewController {
+    private func setEditorMode(_ mode: EditorMode, animated: Bool) {
+        editorMode = mode
+
+        let showsAdjustments = mode == .adjustments
+
+        let updates = {
+            self.presetPickerView.isHidden = showsAdjustments
+            self.controlsView.isHidden = !showsAdjustments
+            self.updateModeSwitchButton()
+            self.view.layoutIfNeeded()
+        }
+
+        guard animated else {
+            updates()
+            return
+        }
+
+        view.layoutIfNeeded()
+
+        UIView.animate(
+            withDuration: 0.25,
+            delay: 0,
+            options: [.curveEaseInOut, .beginFromCurrentState],
+            animations: updates
+        )
+    }
+
+    private func updateModeSwitchButton() {
+        var configuration = modeSwitchButton.configuration ?? .plain()
+
+        switch editorMode {
+        case .styles:
+            configuration.title = "Adjust"
+            configuration.image = UIImage(systemName: "slider.horizontal.3")
+            modeSwitchButton.accessibilityLabel = "Adjust photo"
+
+        case .adjustments:
+            configuration.title = "Styles"
+            configuration.image = UIImage(systemName: "chevron.backward")
+            modeSwitchButton.accessibilityLabel = "Return to styles"
+        }
+
+        configuration.imagePadding = 8
+        modeSwitchButton.configuration = configuration
+    }
+
+    @objc private func modeSwitchButtonTapped() {
+        switch editorMode {
+        case .styles:
+            setEditorMode(.adjustments, animated: true)
+
+        case .adjustments:
+            setEditorMode(.styles, animated: true)
         }
     }
 }
