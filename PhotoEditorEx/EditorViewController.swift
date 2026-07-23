@@ -274,8 +274,17 @@ final class EditorViewController: UIViewController {
             self?.applyAutoToAllPhotos()
         }
 
+        let resetAllAction = UIAction(
+            title: "Reset All",
+            image: UIImage(systemName: "arrow.counterclockwise"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.showResetAllConfirmation()
+        }
+
         return UIMenu(children: [
-            autoAllAction
+            autoAllAction,
+            resetAllAction
         ])
     }
 
@@ -698,6 +707,62 @@ final class EditorViewController: UIViewController {
                 skippedCount: skippedCount
             )
         }
+    }
+
+    private func showResetAllConfirmation() {
+        let alert = UIAlertController(
+            title: "Reset All Changes?",
+            message: "Auto, manual adjustments, and the selected preset will be removed from every photo.",
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(
+            title: "Cancel",
+            style: .cancel
+        ))
+
+        alert.addAction(UIAlertAction(
+            title: "Reset All",
+            style: .destructive
+        ) { [weak self] _ in
+            self?.resetAllPhotos()
+        })
+
+        present(alert, animated: true)
+    }
+
+    private func resetAllPhotos() {
+        guard !isExporting, !isApplyingAutoToAll else { return }
+
+        autoRequestID = nil
+        previewRenderRequest?.cancel()
+        previewRenderRequest = nil
+
+        photos = photos.map { photo in
+            var photo = photo
+
+            photo.recipe = .neutral
+            photo.recipeBeforeAuto = nil
+
+            return photo
+        }
+
+        recipeBeforeAuto = nil
+        renderedPreviewImage = nil
+        isShowingOriginal = false
+
+        isApplyingPhotoState = true
+        recipe = .neutral
+        isApplyingPhotoState = false
+
+        selectedPreset = .none
+
+        actionBarView.setAutoEnabled(false)
+        controlsView.setRecipe(.neutral, animated: true)
+        presetPickerView.setSelectedPreset(.none, animated: true)
+
+        scheduleCollectionSave()
+        scheduleRenderPreview()
     }
 
     private func makeAutoRecipe(for image: UIImage, baseRecipe: EditRecipe) async -> EditRecipe {
