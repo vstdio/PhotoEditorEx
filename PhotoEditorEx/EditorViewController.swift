@@ -45,20 +45,7 @@ final class EditorViewController: UIViewController {
     }()
 
     private let presetPickerView = PresetPickerView()
-
-    private let modeSwitchButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.plain()
-        configuration.title = "Adjust"
-        configuration.image = UIImage(systemName: "slider.horizontal.3")
-        configuration.imagePadding = 8
-
-        button.configuration = configuration
-        button.accessibilityLabel = "Adjust photo"
-
-        return button
-    }()
+    private let actionBarView = EditorActionBarView()
 
     private var selectedPreset: PhotoPreset {
         didSet {
@@ -187,7 +174,7 @@ final class EditorViewController: UIViewController {
         presetPickerView.setSelectedPreset(selectedPreset, animated: false)
         filmstripView.configure(photos: photos, selectedIndex: currentPhotoIndex)
         controlsView.setRecipe(recipe, animated: false)
-        controlsView.setAutoEnabled(recipeBeforeAuto != nil)
+        actionBarView.setAutoEnabled(recipeBeforeAuto != nil)
         editorImageView.setImage(previewImage, resetZoom: true)
     }
 
@@ -291,7 +278,7 @@ final class EditorViewController: UIViewController {
         view.addSubview(progressOverlayView)
 
         bottomPanelContainerView.addArrangedSubview(presetPickerView)
-        bottomPanelContainerView.addArrangedSubview(modeSwitchButton)
+        bottomPanelContainerView.addArrangedSubview(actionBarView)
         bottomPanelContainerView.addArrangedSubview(controlsView)
 
         progressOverlayView.addSubview(activityIndicator)
@@ -306,8 +293,8 @@ final class EditorViewController: UIViewController {
             make.height.equalTo(58)
         }
 
-        modeSwitchButton.snp.makeConstraints { make in
-            make.height.equalTo(44)
+        actionBarView.snp.makeConstraints { make in
+            make.height.equalTo(56)
         }
 
         filmstripView.snp.makeConstraints { make in
@@ -343,11 +330,17 @@ final class EditorViewController: UIViewController {
     }
 
     private func setupActions() {
-        modeSwitchButton.addTarget(
-            self,
-            action: #selector(modeSwitchButtonTapped),
-            for: .touchUpInside
-        )
+        actionBarView.onAutoTapped = { [weak self] isEnabled in
+            self?.setAutoEnabled(isEnabled)
+        }
+
+        actionBarView.onResetTapped = { [weak self] in
+            self?.resetCurrentPhoto()
+        }
+
+        actionBarView.onModeTapped = { [weak self] in
+            self?.toggleEditorMode()
+        }
 
         controlsView.onBrightnessChanged = { [weak self] value in
             self?.updateRecipeManually {
@@ -433,20 +426,6 @@ final class EditorViewController: UIViewController {
             }
         }
 
-        controlsView.onAutoChanged = { [weak self] isEnabled in
-            self?.setAutoEnabled(isEnabled)
-        }
-
-        controlsView.onResetAll = { [weak self] in
-            guard let self else { return }
-
-            autoRequestID = nil
-            setRecipeBeforeAuto(nil)
-
-            controlsView.setAutoEnabled(false)
-            recipe = .neutral
-        }
-
         filmstripView.onPhotoSelected = { [weak self] index in
             self?.showPhoto(at: index)
         }
@@ -517,9 +496,7 @@ final class EditorViewController: UIViewController {
                     animated: false
                 )
 
-                controlsView.setAutoEnabled(
-                    photo.recipeBeforeAuto != nil
-                )
+                actionBarView.setAutoEnabled(photo.recipeBeforeAuto != nil)
 
                 editorImageView.setImage(
                     previewImage,
@@ -539,6 +516,7 @@ final class EditorViewController: UIViewController {
     private func setPhotoLoading(_ isLoading: Bool) {
         controlsView.isUserInteractionEnabled = !isLoading
         presetPickerView.isUserInteractionEnabled = !isLoading
+        actionBarView.isUserInteractionEnabled = !isLoading
 
         navigationItem.rightBarButtonItems?.forEach {
             $0.isEnabled = !isLoading
@@ -575,9 +553,22 @@ final class EditorViewController: UIViewController {
         if autoRequestID != nil {
             autoRequestID = nil
             setRecipeBeforeAuto(nil)
-            controlsView.setAutoEnabled(false)
+            actionBarView.setAutoEnabled(false)
         }
         update(&recipe)
+    }
+
+    private func resetCurrentPhoto() {
+        autoRequestID = nil
+        setRecipeBeforeAuto(nil)
+
+        actionBarView.setAutoEnabled(false)
+
+        recipe = .neutral
+        controlsView.setRecipe(.neutral, animated: true)
+
+        selectedPreset = .none
+        presetPickerView.setSelectedPreset(.none, animated: true)
     }
 
     private func setAutoEnabled(_ isEnabled: Bool) {
@@ -631,7 +622,7 @@ final class EditorViewController: UIViewController {
         if autoRequestID != nil {
             autoRequestID = nil
             setRecipeBeforeAuto(nil)
-            controlsView.setAutoEnabled(false)
+            actionBarView.setAutoEnabled(false)
         }
 
         let photosSnapshot = photos
@@ -708,7 +699,7 @@ final class EditorViewController: UIViewController {
         renderedPreviewImage = nil
         isShowingOriginal = false
 
-        controlsView.setAutoEnabled(currentPhoto.recipeBeforeAuto != nil)
+        actionBarView.setAutoEnabled(currentPhoto.recipeBeforeAuto != nil)
         controlsView.setRecipe(currentPhoto.recipe, animated: true)
 
         recipe = currentPhoto.recipe
@@ -728,6 +719,7 @@ final class EditorViewController: UIViewController {
         filmstripView.isUserInteractionEnabled = !isApplying
         presetPickerView.isUserInteractionEnabled = !isApplying
         editorImageView.isUserInteractionEnabled = !isApplying
+        actionBarView.isUserInteractionEnabled = !isApplying
 
         if isApplying {
             progressLabel.text = "Preparing Auto for \(totalCount) photos…"
@@ -917,6 +909,7 @@ final class EditorViewController: UIViewController {
         filmstripView.isUserInteractionEnabled = !isExporting
         presetPickerView.isUserInteractionEnabled = !isExporting
         editorImageView.isUserInteractionEnabled = !isExporting
+        actionBarView.isUserInteractionEnabled = !isExporting
 
         if isExporting {
             progressLabel.text = totalCount == 1
@@ -1068,13 +1061,18 @@ final class EditorViewController: UIViewController {
 }
 
 extension EditorViewController {
+
     private func setEditorMode(_ mode: EditorMode, animated: Bool) {
         editorMode = mode
 
+        let showsAdjustments = mode == .adjustments
+
         let updates = { [weak self] in
-            self?.controlsView.isHidden = mode != .adjustments
-            self?.updateModeSwitchButton()
-            self?.view.layoutIfNeeded()
+            guard let self else { return }
+
+            controlsView.isHidden = !showsAdjustments
+            actionBarView.setShowsAdjustments(showsAdjustments)
+            view.layoutIfNeeded()
         }
 
         guard animated else {
@@ -1090,26 +1088,7 @@ extension EditorViewController {
         )
     }
 
-    private func updateModeSwitchButton() {
-        var configuration = modeSwitchButton.configuration ?? .plain()
-
-        switch editorMode {
-        case .styles:
-            configuration.title = "Adjust"
-            configuration.image = UIImage(systemName: "slider.horizontal.3")
-            modeSwitchButton.accessibilityLabel = "Adjust photo"
-
-        case .adjustments:
-            configuration.title = "Styles"
-            configuration.image = UIImage(systemName: "chevron.backward")
-            modeSwitchButton.accessibilityLabel = "Return to styles"
-        }
-
-        configuration.imagePadding = 8
-        modeSwitchButton.configuration = configuration
-    }
-
-    @objc private func modeSwitchButtonTapped() {
+    private func toggleEditorMode() {
         switch editorMode {
         case .styles:
             setEditorMode(.adjustments, animated: true)

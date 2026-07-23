@@ -24,8 +24,6 @@ final class EditorControlsView: UIView {
     var onBlurChanged: ((Float) -> Void)?
     var onSharpenChanged: ((Float) -> Void)?
     var onVignetteChanged: ((Float) -> Void)?
-    var onAutoChanged: ((Bool) -> Void)?
-    var onResetAll: (() -> Void)?
 
     private let categorySegmentedControl: UISegmentedControl = {
         let control = UISegmentedControl(
@@ -268,47 +266,14 @@ final class EditorControlsView: UIView {
         accessibilityLabel: "Vignette"
     )
 
-    private let autoButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        button.accessibilityLabel = "Auto"
-        button.accessibilityHint = "Toggles automatic image adjustments"
-
-        return button
-    }()
-
-    private let resetCurrentButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.bordered()
-        configuration.title = "Reset"
-
-        button.configuration = configuration
-        return button
-    }()
-
-    private let resetAllButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        var configuration = UIButton.Configuration.bordered()
-        configuration.title = "Reset All"
-
-        button.configuration = configuration
-        return button
-    }()
-
     private var activeSliderView: AdjustmentSliderView?
     private var selectedToolButton: UIButton?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-
         backgroundColor = .systemBackground
-
-        updateAutoButtonAppearance()
         setupLayout()
         setupActions()
-
         showToneCategory()
     }
 
@@ -392,45 +357,10 @@ final class EditorControlsView: UIView {
         )
     }
 
-    func setAutoEnabled(_ isEnabled: Bool) {
-        autoButton.isSelected = isEnabled
-        updateAutoButtonAppearance()
-    }
-
-    private func updateAutoButtonAppearance() {
-        var configuration: UIButton.Configuration
-
-        if autoButton.isSelected {
-            configuration = .borderedProminent()
-        } else {
-            configuration = .bordered()
-        }
-
-        configuration.title = "Auto"
-        configuration.image = UIImage(
-            systemName: "wand.and.stars"
-        )
-        configuration.imagePadding = 6
-
-        autoButton.configuration = configuration
-        autoButton.accessibilityValue = autoButton.isSelected
-            ? "On"
-            : "Off"
-
-        if autoButton.isSelected {
-            autoButton.accessibilityTraits.insert(.selected)
-        } else {
-            autoButton.accessibilityTraits.remove(.selected)
-        }
-    }
-
     private func setupLayout() {
         addSubview(activeSliderContainerView)
         addSubview(categorySegmentedControl)
         addSubview(toolsScrollView)
-        addSubview(autoButton)
-        addSubview(resetCurrentButton)
-        addSubview(resetAllButton)
 
         toolsScrollView.addSubview(toolsContentView)
         toolsContentView.addSubview(toolsStackView)
@@ -452,6 +382,7 @@ final class EditorControlsView: UIView {
             make.top.equalTo(categorySegmentedControl.snp.bottom).offset(12)
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(44)
+            make.bottom.equalToSuperview().inset(16)
         }
 
         toolsContentView.snp.makeConstraints { make in
@@ -473,26 +404,6 @@ final class EditorControlsView: UIView {
 
             make.leading.greaterThanOrEqualToSuperview().offset(16)
             make.trailing.lessThanOrEqualToSuperview().inset(16)
-        }
-
-        autoButton.snp.makeConstraints { make in
-            make.top.equalTo(toolsScrollView.snp.bottom).offset(12)
-            make.leading.equalToSuperview().offset(16)
-            make.height.equalTo(44)
-            make.bottom.equalToSuperview().inset(16)
-        }
-
-        resetCurrentButton.snp.makeConstraints { make in
-            make.top.height.equalTo(autoButton)
-            make.leading.equalTo(autoButton.snp.trailing).offset(8)
-            make.width.equalTo(autoButton)
-        }
-
-        resetAllButton.snp.makeConstraints { make in
-            make.top.height.equalTo(autoButton)
-            make.leading.equalTo(resetCurrentButton.snp.trailing).offset(8)
-            make.trailing.equalToSuperview().inset(16)
-            make.width.equalTo(autoButton)
         }
     }
 
@@ -640,24 +551,6 @@ final class EditorControlsView: UIView {
         vignetteToolButton.addTarget(
             self,
             action: #selector(vignetteToolButtonTapped),
-            for: .touchUpInside
-        )
-
-        autoButton.addTarget(
-            self,
-            action: #selector(autoButtonTapped),
-            for: .touchUpInside
-        )
-
-        resetCurrentButton.addTarget(
-            self,
-            action: #selector(resetCurrentButtonTapped),
-            for: .touchUpInside
-        )
-
-        resetAllButton.addTarget(
-            self,
-            action: #selector(resetAllButtonTapped),
             for: .touchUpInside
         )
     }
@@ -878,76 +771,6 @@ final class EditorControlsView: UIView {
             vignetteSliderView,
             selectedButton: vignetteToolButton
         )
-    }
-
-    @objc private func autoButtonTapped() {
-        let isEnabled = !autoButton.isSelected
-        setAutoEnabled(isEnabled)
-        onAutoChanged?(isEnabled)
-    }
-
-    @objc private func resetCurrentButtonTapped() {
-        if activeSliderView === brightnessSliderView {
-            brightnessSliderView.setValue(0, animated: true)
-            onBrightnessChanged?(0)
-        } else if activeSliderView === contrastSliderView {
-            contrastSliderView.setValue(1, animated: true)
-            onContrastChanged?(1)
-        } else if activeSliderView === saturationSliderView {
-            saturationSliderView.setValue(1, animated: true)
-            onSaturationChanged?(1)
-        } else if activeSliderView === exposureSliderView {
-            exposureSliderView.setValue(0, animated: true)
-            onExposureChanged?(0)
-        } else if activeSliderView === blurSliderView {
-            blurSliderView.setValue(0, animated: true)
-            onBlurChanged?(0)
-        } else if activeSliderView === sharpenSliderView {
-            sharpenSliderView.setValue(0, animated: true)
-            onSharpenChanged?(0)
-        } else if activeSliderView === vignetteSliderView {
-            vignetteSliderView.setValue(0, animated: true)
-            onVignetteChanged?(0)
-        } else if activeSliderView === shadowsSliderView {
-            shadowsSliderView.setValue(0, animated: true)
-            onShadowsChanged?(0)
-        } else if activeSliderView === highlightsSliderView {
-            highlightsSliderView.setValue(0, animated: true)
-            onHighlightsChanged?(0)
-        } else if activeSliderView === whitesSliderView {
-            whitesSliderView.setValue(0, animated: true)
-            onWhitesChanged?(0)
-        } else if activeSliderView === blacksSliderView {
-            blacksSliderView.setValue(0, animated: true)
-            onBlacksChanged?(0)
-        } else if activeSliderView === temperatureSliderView {
-            temperatureSliderView.setValue(0, animated: true)
-            onTemperatureChanged?(0)
-        } else if activeSliderView === tintSliderView {
-            tintSliderView.setValue(0, animated: true)
-            onTintChanged?(0)
-        } else if activeSliderView === vibranceSliderView {
-            vibranceSliderView.setValue(0, animated: true)
-            onVibranceChanged?(0)
-        }
-    }
-
-    @objc private func resetAllButtonTapped() {
-        brightnessSliderView.setValue(0, animated: true)
-        contrastSliderView.setValue(1, animated: true)
-        saturationSliderView.setValue(1, animated: true)
-        temperatureSliderView.setValue(0, animated: true)
-        tintSliderView.setValue(0, animated: true)
-        vibranceSliderView.setValue(0, animated: true)
-        exposureSliderView.setValue(0, animated: true)
-        shadowsSliderView.setValue(0, animated: true)
-        highlightsSliderView.setValue(0, animated: true)
-        whitesSliderView.setValue(0, animated: true)
-        blacksSliderView.setValue(0, animated: true)
-        blurSliderView.setValue(0, animated: true)
-        sharpenSliderView.setValue(0, animated: true)
-        vignetteSliderView.setValue(0, animated: true)
-        onResetAll?()
     }
 
     private static func makeToolButton(
