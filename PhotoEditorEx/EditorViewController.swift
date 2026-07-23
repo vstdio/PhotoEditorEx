@@ -30,22 +30,7 @@ final class EditorViewController: UIViewController {
     private var photoSwitchRequestID: UUID?
     private var isApplyingPhotoState = false
 
-    private let filmstripView = EditorFilmstripView()
-
     private var editorMode: EditorMode = .styles
-
-    private let bottomPanelContainerView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.alignment = .fill
-        stackView.distribution = .fill
-        stackView.spacing = 0
-        stackView.backgroundColor = .systemBackground
-        return stackView
-    }()
-
-    private let presetPickerView = PresetPickerView()
-    private let actionBarView = EditorActionBarView()
 
     private var selectedPreset: PhotoPreset {
         didSet {
@@ -121,7 +106,26 @@ final class EditorViewController: UIViewController {
     private var isShowingOriginal = false
 
     private let editorImageView = EditorImageView()
+    private let editorImageContainerView = UIView()
+
+    private let filmstripView = EditorFilmstripView()
+    private let filmstripContainerView = UIView()
+
+    private let presetPickerView = PresetPickerView()
+    private let presetContainerView = UIView()
+
+    private let actionBarView = EditorActionBarView()
     private let controlsView = EditorControlsView()
+
+    private let bottomPanelContainerView: UIStackView = {
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.distribution = .fill
+        stackView.spacing = 0
+        stackView.backgroundColor = .systemBackground
+        return stackView
+    }()
 
     init(
         collectionID: UUID,
@@ -273,16 +277,20 @@ final class EditorViewController: UIViewController {
     }
 
     private func setupLayout() {
-        view.addSubview(editorImageView)
-        view.addSubview(filmstripView)
+        view.addSubview(editorImageContainerView)
+        view.addSubview(filmstripContainerView)
         view.addSubview(bottomPanelContainerView)
         view.addSubview(progressOverlayView)
 
-        bottomPanelContainerView.addArrangedSubview(presetPickerView)
+        editorImageContainerView.addSubview(editorImageView)
+        filmstripContainerView.addSubview(filmstripView)
+        presetContainerView.addSubview(presetPickerView)
+
+        bottomPanelContainerView.addArrangedSubview(presetContainerView)
         bottomPanelContainerView.addArrangedSubview(actionBarView)
         bottomPanelContainerView.addArrangedSubview(controlsView)
 
-        bottomPanelContainerView.setCustomSpacing(8, after: presetPickerView)
+        bottomPanelContainerView.setCustomSpacing(8, after: presetContainerView)
         bottomPanelContainerView.setCustomSpacing(8, after: actionBarView)
 
         progressOverlayView.addSubview(activityIndicator)
@@ -293,24 +301,38 @@ final class EditorViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
+        presetContainerView.snp.makeConstraints { make in
+            make.height.equalTo(66)
+        }
+
         presetPickerView.snp.makeConstraints { make in
-            make.height.equalTo(58)
+            make.top.bottom.equalToSuperview().inset(4)
+            make.leading.trailing.equalToSuperview().inset(12)
         }
 
         actionBarView.snp.makeConstraints { make in
             make.height.equalTo(48)
         }
 
-        filmstripView.snp.makeConstraints { make in
+        filmstripContainerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(bottomPanelContainerView.snp.top)
-            make.height.equalTo(photos.count > 1 ? 68 : 0)
+            make.height.equalTo(photos.count > 1 ? 76 : 0)
+        }
+
+        filmstripView.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview().inset(4)
+            make.leading.trailing.equalToSuperview().inset(12)
+        }
+
+        editorImageContainerView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
+            make.leading.trailing.equalToSuperview().inset(8)
+            make.bottom.equalTo(filmstripContainerView.snp.top).offset(-4)
         }
 
         editorImageView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide)
-            make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(filmstripView.snp.top)
+            make.edges.equalToSuperview()
         }
 
         progressOverlayView.snp.makeConstraints { make in
@@ -330,7 +352,7 @@ final class EditorViewController: UIViewController {
             make.bottom.equalToSuperview().inset(20)
         }
 
-        filmstripView.isHidden = photos.count <= 1
+        filmstripContainerView.isHidden = photos.count <= 1
     }
 
     private func setupActions() {
@@ -1053,18 +1075,19 @@ final class EditorViewController: UIViewController {
         }
     }
 
-    private func applySoftBlueContainerStyle(to view: UIView, cornerRadius: CGFloat) {
+    private func applyCardStyle(to view: UIView, cornerRadius: CGFloat) {
+        view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.035)
         view.layer.cornerRadius = cornerRadius
         view.layer.cornerCurve = .continuous
-        view.layer.borderWidth = 1
-        view.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.18).cgColor
+        view.layer.borderWidth = 0.75
+        view.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.16).cgColor
         view.clipsToBounds = true
     }
 
     private func setupContainerAppearance() {
-        applySoftBlueContainerStyle(to: editorImageView, cornerRadius: 16)
-        applySoftBlueContainerStyle(to: filmstripView, cornerRadius: 14)
-        applySoftBlueContainerStyle(to: presetPickerView, cornerRadius: 14)
+        applyCardStyle(to: editorImageView, cornerRadius: 18)
+        applyCardStyle(to: filmstripView, cornerRadius: 14)
+        applyCardStyle(to: presetPickerView, cornerRadius: 14)
     }
 }
 

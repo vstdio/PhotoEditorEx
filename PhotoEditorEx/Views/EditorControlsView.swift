@@ -358,28 +358,27 @@ final class EditorControlsView: UIView {
     }
 
     private func setupLayout() {
-        addSubview(activeSliderContainerView)
         addSubview(categorySegmentedControl)
+        addSubview(activeSliderContainerView)
         addSubview(toolsScrollView)
 
         toolsScrollView.addSubview(toolsContentView)
         toolsContentView.addSubview(toolsStackView)
 
+        categorySegmentedControl.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(8)
+            make.leading.trailing.equalToSuperview().inset(24)
+            make.height.equalTo(36)
+        }
+
         activeSliderContainerView.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(16)
+            make.top.equalTo(categorySegmentedControl.snp.bottom).offset(14)
             make.leading.trailing.equalToSuperview().inset(24)
             make.height.equalTo(64)
         }
 
-        categorySegmentedControl.snp.makeConstraints { make in
-            make.top.equalTo(activeSliderContainerView.snp.bottom).offset(12)
-            make.centerX.equalToSuperview()
-            make.width.equalTo(280)
-            make.height.equalTo(32)
-        }
-
         toolsScrollView.snp.makeConstraints { make in
-            make.top.equalTo(categorySegmentedControl.snp.bottom).offset(12)
+            make.top.equalTo(activeSliderContainerView.snp.bottom).offset(12)
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(44)
             make.bottom.equalToSuperview().inset(16)
@@ -401,7 +400,6 @@ final class EditorControlsView: UIView {
         toolsStackView.snp.makeConstraints { make in
             make.top.bottom.equalToSuperview()
             make.centerX.equalToSuperview()
-
             make.leading.greaterThanOrEqualToSuperview().offset(16)
             make.trailing.lessThanOrEqualToSuperview().inset(16)
         }

@@ -25,7 +25,7 @@ final class PresetPickerView: UIView {
 
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
 
-        collectionView.backgroundColor = .secondarySystemBackground
+        collectionView.backgroundColor = .clear
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.dataSource = self
         collectionView.delegate = self
