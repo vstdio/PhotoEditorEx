@@ -1098,25 +1098,59 @@ extension EditorViewController {
 
         let showsAdjustments = mode == .adjustments
 
-        let updates = { [weak self] in
-            guard let self else { return }
-
-            controlsView.isHidden = !showsAdjustments
-            actionBarView.setShowsAdjustments(showsAdjustments)
-            view.layoutIfNeeded()
-        }
+        actionBarView.setShowsAdjustments(showsAdjustments)
 
         guard animated else {
-            updates()
+            controlsView.layer.removeAllAnimations()
+            controlsView.alpha = 1
+            controlsView.isHidden = !showsAdjustments
+
+            view.layoutIfNeeded()
             return
         }
 
-        UIView.animate(
-            withDuration: 0.25,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState],
-            animations: updates
-        )
+        view.layoutIfNeeded()
+        controlsView.layer.removeAllAnimations()
+
+        if showsAdjustments {
+            controlsView.alpha = 0
+            controlsView.isHidden = false
+
+            UIView.animate(
+                withDuration: 0.24,
+                delay: 0,
+                options: [.curveEaseInOut, .beginFromCurrentState],
+                animations: {
+                    self.controlsView.alpha = 1
+                    self.view.layoutIfNeeded()
+                }
+            )
+        } else {
+            UIView.animate(
+                withDuration: 0.10,
+                delay: 0,
+                options: [.curveEaseIn, .beginFromCurrentState],
+                animations: {
+                    self.controlsView.alpha = 0
+                },
+                completion: { [weak self] _ in
+                    guard let self else { return }
+                    guard editorMode == .styles else { return }
+
+                    controlsView.isHidden = true
+                    controlsView.alpha = 1
+
+                    UIView.animate(
+                        withDuration: 0.14,
+                        delay: 0,
+                        options: [.curveEaseOut, .beginFromCurrentState],
+                        animations: {
+                            self.view.layoutIfNeeded()
+                        }
+                    )
+                }
+            )
+        }
     }
 
     private func toggleEditorMode() {
