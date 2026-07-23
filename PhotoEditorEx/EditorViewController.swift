@@ -117,6 +117,9 @@ final class EditorViewController: UIViewController {
     private let actionBarView = EditorActionBarView()
     private let controlsView = EditorControlsView()
 
+    private let actionBarContainerView = UIView()
+    private let controlsContainerView = UIView()
+
     private let bottomPanelContainerView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .vertical
@@ -285,13 +288,15 @@ final class EditorViewController: UIViewController {
         editorImageContainerView.addSubview(editorImageView)
         filmstripContainerView.addSubview(filmstripView)
         presetContainerView.addSubview(presetPickerView)
+        actionBarContainerView.addSubview(actionBarView)
+        controlsContainerView.addSubview(controlsView)
 
         bottomPanelContainerView.addArrangedSubview(presetContainerView)
-        bottomPanelContainerView.addArrangedSubview(actionBarView)
-        bottomPanelContainerView.addArrangedSubview(controlsView)
+        bottomPanelContainerView.addArrangedSubview(actionBarContainerView)
+        bottomPanelContainerView.addArrangedSubview(controlsContainerView)
 
-        bottomPanelContainerView.setCustomSpacing(8, after: presetContainerView)
-        bottomPanelContainerView.setCustomSpacing(8, after: actionBarView)
+        bottomPanelContainerView.setCustomSpacing(6, after: presetContainerView)
+        bottomPanelContainerView.setCustomSpacing(6, after: actionBarContainerView)
 
         progressOverlayView.addSubview(activityIndicator)
         progressOverlayView.addSubview(progressLabel)
@@ -310,8 +315,18 @@ final class EditorViewController: UIViewController {
             make.leading.trailing.equalToSuperview().inset(12)
         }
 
+        actionBarContainerView.snp.makeConstraints { make in
+            make.height.equalTo(56)
+        }
+
         actionBarView.snp.makeConstraints { make in
-            make.height.equalTo(48)
+            make.top.bottom.equalToSuperview().inset(4)
+            make.leading.trailing.equalToSuperview().inset(12)
+        }
+
+        controlsView.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview().inset(4)
+            make.leading.trailing.equalToSuperview().inset(12)
         }
 
         filmstripContainerView.snp.makeConstraints { make in
@@ -327,7 +342,7 @@ final class EditorViewController: UIViewController {
 
         editorImageContainerView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
-            make.leading.trailing.equalToSuperview().inset(8)
+            make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(filmstripContainerView.snp.top).offset(-4)
         }
 
@@ -1076,11 +1091,11 @@ final class EditorViewController: UIViewController {
     }
 
     private func applyCardStyle(to view: UIView, cornerRadius: CGFloat) {
-        view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.035)
+        view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.025)
         view.layer.cornerRadius = cornerRadius
         view.layer.cornerCurve = .continuous
         view.layer.borderWidth = 0.75
-        view.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.16).cgColor
+        view.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.14).cgColor
         view.clipsToBounds = true
     }
 
@@ -1088,6 +1103,8 @@ final class EditorViewController: UIViewController {
         applyCardStyle(to: editorImageView, cornerRadius: 18)
         applyCardStyle(to: filmstripView, cornerRadius: 14)
         applyCardStyle(to: presetPickerView, cornerRadius: 14)
+        applyCardStyle(to: actionBarView, cornerRadius: 16)
+        applyCardStyle(to: controlsView, cornerRadius: 18)
     }
 }
 
@@ -1095,33 +1112,30 @@ extension EditorViewController {
 
     private func setEditorMode(_ mode: EditorMode, animated: Bool) {
         editorMode = mode
-
         let showsAdjustments = mode == .adjustments
-
         actionBarView.setShowsAdjustments(showsAdjustments)
 
         guard animated else {
-            controlsView.layer.removeAllAnimations()
-            controlsView.alpha = 1
-            controlsView.isHidden = !showsAdjustments
-
+            controlsContainerView.layer.removeAllAnimations()
+            controlsContainerView.alpha = 1
+            controlsContainerView.isHidden = !showsAdjustments
             view.layoutIfNeeded()
             return
         }
 
         view.layoutIfNeeded()
-        controlsView.layer.removeAllAnimations()
+        controlsContainerView.layer.removeAllAnimations()
 
         if showsAdjustments {
-            controlsView.alpha = 0
-            controlsView.isHidden = false
+            controlsContainerView.alpha = 0
+            controlsContainerView.isHidden = false
 
             UIView.animate(
                 withDuration: 0.24,
                 delay: 0,
                 options: [.curveEaseInOut, .beginFromCurrentState],
                 animations: {
-                    self.controlsView.alpha = 1
+                    self.controlsContainerView.alpha = 1
                     self.view.layoutIfNeeded()
                 }
             )
@@ -1131,14 +1145,14 @@ extension EditorViewController {
                 delay: 0,
                 options: [.curveEaseIn, .beginFromCurrentState],
                 animations: {
-                    self.controlsView.alpha = 0
+                    self.controlsContainerView.alpha = 0
                 },
                 completion: { [weak self] _ in
                     guard let self else { return }
                     guard editorMode == .styles else { return }
 
-                    controlsView.isHidden = true
-                    controlsView.alpha = 1
+                    controlsContainerView.isHidden = true
+                    controlsContainerView.alpha = 1
 
                     UIView.animate(
                         withDuration: 0.14,
