@@ -1071,21 +1071,16 @@ extension EditorViewController {
     private func setEditorMode(_ mode: EditorMode, animated: Bool) {
         editorMode = mode
 
-        let showsAdjustments = mode == .adjustments
-
-        let updates = {
-            self.presetPickerView.isHidden = showsAdjustments
-            self.controlsView.isHidden = !showsAdjustments
-            self.updateModeSwitchButton()
-            self.view.layoutIfNeeded()
+        let updates = { [weak self] in
+            self?.controlsView.isHidden = mode != .adjustments
+            self?.updateModeSwitchButton()
+            self?.view.layoutIfNeeded()
         }
 
         guard animated else {
             updates()
             return
         }
-
-        view.layoutIfNeeded()
 
         UIView.animate(
             withDuration: 0.25,
