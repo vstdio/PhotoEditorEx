@@ -624,15 +624,13 @@ final class EditorViewController: UIViewController {
     }
 
     private func applyAutoAdjustments() {
-        guard recipeBeforeAuto == nil else {
-            return
-        }
+        guard recipeBeforeAuto == nil else { return }
 
-        let baseRecipe = recipe
+        let previousRecipe = recipe
         let inputImage = previewCIImage
         let service = autoAdjustmentService
 
-        setRecipeBeforeAuto(baseRecipe)
+        setRecipeBeforeAuto(previousRecipe)
 
         let requestID = UUID()
         autoRequestID = requestID
@@ -640,7 +638,7 @@ final class EditorViewController: UIViewController {
         autoQueue.async { [weak self] in
             let autoRecipe = service.makeRecipe(
                 for: inputImage,
-                baseRecipe: baseRecipe
+                baseRecipe: .neutral
             )
 
             DispatchQueue.main.async { [weak self] in
@@ -649,11 +647,7 @@ final class EditorViewController: UIViewController {
 
                 autoRequestID = nil
 
-                controlsView.setRecipe(
-                    autoRecipe,
-                    animated: true
-                )
-
+                controlsView.setRecipe(autoRecipe, animated: true)
                 recipe = autoRecipe
             }
         }
@@ -692,7 +686,7 @@ final class EditorViewController: UIViewController {
 
                 let autoRecipe = await makeAutoRecipe(
                     for: photo.originalImage,
-                    baseRecipe: photo.recipe
+                    baseRecipe: .neutral
                 )
 
                 updatedPhotos[index].recipeBeforeAuto = photo.recipe
