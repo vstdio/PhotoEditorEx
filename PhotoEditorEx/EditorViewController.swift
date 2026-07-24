@@ -71,6 +71,9 @@ final class EditorViewController: UIViewController {
     private var isExporting = false
     private var isApplyingAutoToAll = false
 
+    private let photoMetadataService = PhotoMetadataService()
+    private var isLoadingMetadata = false
+
     private let progressOverlayView: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
@@ -391,6 +394,10 @@ final class EditorViewController: UIViewController {
 
         actionBarView.onResetTapped = { [weak self] in
             self?.resetCurrentPhoto()
+        }
+
+        actionBarView.onInfoTapped = { [weak self] in
+            self?.showCurrentPhotoMetadata()
         }
 
         actionBarView.onModeTapped = { [weak self] in
@@ -1228,4 +1235,78 @@ extension EditorViewController {
             setEditorMode(.styles, animated: true)
         }
     }
+}
+
+extension EditorViewController {
+
+    private func showCurrentPhotoMetadata() {
+        guard !isLoadingMetadata else {
+            return
+        }
+
+        guard photos.indices.contains(currentPhotoIndex) else {
+            return
+        }
+
+        let photo = photos[currentPhotoIndex]
+        let photoID = photo.id
+        let fileURL = photo.originalFileURL
+
+        isLoadingMetadata = true
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            defer {
+                isLoadingMetadata = false
+            }
+
+            do {
+                let metadata = try await photoMetadataService
+                    .loadMetadata(from: fileURL)
+
+                guard photos.indices.contains(currentPhotoIndex) else {
+                    return
+                }
+
+                guard photos[currentPhotoIndex].id == photoID else {
+                    return
+                }
+
+                let metadataViewController = PhotoMetadataViewController(
+                    metadata: metadata
+                )
+
+                let navigationController = UINavigationController(
+                    rootViewController: metadataViewController
+                )
+
+                navigationController.modalPresentationStyle = .pageSheet
+
+                if let sheet = navigationController.sheetPresentationController {
+                    sheet.detents = [
+                        .medium(),
+                        .large()
+                    ]
+
+                    sheet.selectedDetentIdentifier = .medium
+                    sheet.prefersGrabberVisible = true
+                    sheet.preferredCornerRadius = 24
+                }
+
+                present(
+                    navigationController,
+                    animated: true
+                )
+            } catch {
+                showAlert(
+                    title: "Photo Info",
+                    message: error.localizedDescription
+                )
+            }
+        }
+    }
+
 }

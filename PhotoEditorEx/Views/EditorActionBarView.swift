@@ -12,6 +12,7 @@ final class EditorActionBarView: UIView {
 
     var onAutoTapped: ((Bool) -> Void)?
     var onResetTapped: (() -> Void)?
+    var onInfoTapped: (() -> Void)?
     var onModeTapped: (() -> Void)?
 
     private let leftButtonsStackView: UIStackView = {
@@ -25,8 +26,20 @@ final class EditorActionBarView: UIView {
         return stackView
     }()
 
+    private let rightButtonsStackView: UIStackView = {
+        let stackView = UIStackView()
+
+        stackView.axis = .horizontal
+        stackView.alignment = .fill
+        stackView.distribution = .fill
+        stackView.spacing = 0
+
+        return stackView
+    }()
+
     private let autoButton = UIButton(type: .system)
     private let resetButton = UIButton(type: .system)
+    private let infoButton = UIButton(type: .system)
     private let modeButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
@@ -64,6 +77,13 @@ final class EditorActionBarView: UIView {
     }
 
     private func setupButtons() {
+        infoButton.configuration = makeIconButtonConfiguration(
+            imageName: "info.circle",
+            color: .secondaryLabel
+        )
+
+        infoButton.accessibilityLabel = "Photo information"
+
         resetButton.configuration = makeButtonConfiguration(
             title: "Reset",
             imageName: "arrow.counterclockwise",
@@ -75,7 +95,7 @@ final class EditorActionBarView: UIView {
 
         resetButton.accessibilityLabel = "Reset photo"
 
-        [autoButton, resetButton, modeButton].forEach { button in
+        [autoButton, resetButton, infoButton, modeButton].forEach { button in
             button.configurationUpdateHandler = { button in
                 if !button.isEnabled {
                     button.alpha = 0.35
@@ -90,29 +110,47 @@ final class EditorActionBarView: UIView {
 
     private func setupLayout() {
         addSubview(leftButtonsStackView)
-        addSubview(modeButton)
+        addSubview(rightButtonsStackView)
 
         leftButtonsStackView.addArrangedSubview(autoButton)
         leftButtonsStackView.addArrangedSubview(resetButton)
 
+        rightButtonsStackView.addArrangedSubview(infoButton)
+        rightButtonsStackView.addArrangedSubview(modeButton)
+
         leftButtonsStackView.snp.makeConstraints { make in
             make.top.bottom.equalToSuperview().inset(4)
             make.leading.equalToSuperview().offset(8)
+
+            make.trailing.lessThanOrEqualTo(
+                rightButtonsStackView.snp.leading
+            ).offset(-8)
         }
 
-        modeButton.snp.makeConstraints { make in
+        rightButtonsStackView.snp.makeConstraints { make in
             make.top.bottom.equalToSuperview().inset(4)
             make.trailing.equalToSuperview().inset(8)
-            make.leading.greaterThanOrEqualTo(leftButtonsStackView.snp.trailing).offset(16)
         }
 
-        modeButton.setContentHuggingPriority(.required, for: .horizontal)
-        modeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        infoButton.snp.makeConstraints { make in
+            make.width.equalTo(40)
+        }
+
+        rightButtonsStackView.setContentHuggingPriority(
+            .required,
+            for: .horizontal
+        )
+
+        rightButtonsStackView.setContentCompressionResistancePriority(
+            .required,
+            for: .horizontal
+        )
     }
 
     private func setupActions() {
         autoButton.addTarget(self, action: #selector(autoButtonTapped), for: .touchUpInside)
         resetButton.addTarget(self, action: #selector(resetButtonTapped), for: .touchUpInside)
+        infoButton.addTarget(self, action: #selector(infoButtonTapped), for: .touchUpInside)
         modeButton.addTarget(self, action: #selector(modeButtonTapped), for: .touchUpInside)
     }
 
@@ -159,6 +197,28 @@ final class EditorActionBarView: UIView {
         return configuration
     }
 
+    private func makeIconButtonConfiguration(
+        imageName: String,
+        color: UIColor
+    ) -> UIButton.Configuration {
+        var configuration = UIButton.Configuration.plain()
+
+        configuration.image = UIImage(
+            systemName: imageName
+        )
+
+        configuration.baseForegroundColor = color
+
+        configuration.contentInsets = NSDirectionalEdgeInsets(
+            top: 0,
+            leading: 8,
+            bottom: 0,
+            trailing: 8
+        )
+
+        return configuration
+    }
+
     @objc private func autoButtonTapped() {
         let isEnabled = !autoButton.isSelected
 
@@ -172,5 +232,9 @@ final class EditorActionBarView: UIView {
 
     @objc private func modeButtonTapped() {
         onModeTapped?()
+    }
+
+    @objc private func infoButtonTapped() {
+        onInfoTapped?()
     }
 }
