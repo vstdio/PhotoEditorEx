@@ -33,6 +33,7 @@ final class AdjustmentSliderView: UIView {
         return slider
     }()
 
+    private let defaultValue: Float
     private let valueFormatter: (Float) -> String
 
     init(
@@ -42,6 +43,7 @@ final class AdjustmentSliderView: UIView {
         value: Float,
         valueFormatter: @escaping (Float) -> String = { String(format: "%.2f", $0) }
     ) {
+        self.defaultValue = value
         self.valueFormatter = valueFormatter
 
         super.init(frame: .zero)
@@ -106,11 +108,33 @@ final class AdjustmentSliderView: UIView {
             action: #selector(sliderValueChanged),
             for: .valueChanged
         )
+
+        let doubleTapGestureRecognizer = UITapGestureRecognizer(
+            target: self,
+            action: #selector(sliderDoubleTapped)
+        )
+
+        doubleTapGestureRecognizer.numberOfTapsRequired = 2
+        doubleTapGestureRecognizer.cancelsTouchesInView = false
+
+        slider.addGestureRecognizer(doubleTapGestureRecognizer)
     }
 
     @objc private func sliderValueChanged() {
         let value = slider.value
+
         valueLabel.text = valueFormatter(value)
         onValueChanged?(value)
+    }
+
+    @objc private func sliderDoubleTapped() {
+        guard abs(slider.value - defaultValue) > 0.0001 else {
+            return
+        }
+
+        slider.setValue(defaultValue, animated: true)
+        valueLabel.text = valueFormatter(defaultValue)
+
+        onValueChanged?(defaultValue)
     }
 }
