@@ -147,18 +147,11 @@ final class PhotoCollectionStorageService {
         }
     }
 
-    func updateCollection(
-        id: UUID,
-        photos: [PhotoCollectionPhoto],
-        selectedPresetID: String?
-    ) async throws {
+    func updateCollection(id: UUID, photos: [PhotoCollectionPhoto]) async throws {
         try await perform { [self] in
             var collection = try loadCollectionSync(id: id)
-
             collection.photos = photos
-            collection.selectedPresetID = selectedPresetID
             collection.updatedAt = Date()
-
             try saveSync(collection)
         }
     }
@@ -195,12 +188,15 @@ final class PhotoCollectionStorageService {
                     throw PhotoCollectionStorageError.missingImageFile
                 }
 
+                let preset = PhotoPreset(rawValue: storedPhoto.selectedPresetID ?? "") ?? .none
+
                 return EditablePhoto(
                     id: storedPhoto.id,
                     originalFileURL: fileURL,
                     originalImage: image,
                     recipe: storedPhoto.recipe,
-                    recipeBeforeAuto: storedPhoto.recipeBeforeAuto
+                    recipeBeforeAuto: storedPhoto.recipeBeforeAuto,
+                    preset: preset
                 )
             }
         }

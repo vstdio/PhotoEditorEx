@@ -33,9 +33,14 @@ final class EditorViewController: UIViewController {
     private var editorMode: EditorMode = .styles
 
     private var selectedPreset: PhotoPreset {
-        didSet {
-            guard oldValue != selectedPreset else { return }
-
+        get {
+            guard photos.indices.contains(currentPhotoIndex) else { return .none }
+            return photos[currentPhotoIndex].preset
+        }
+        set {
+            guard photos.indices.contains(currentPhotoIndex) else { return }
+            guard photos[currentPhotoIndex].preset != newValue else { return }
+            photos[currentPhotoIndex].preset = newValue
             scheduleCollectionSave()
             scheduleRenderPreview()
         }
@@ -133,7 +138,6 @@ final class EditorViewController: UIViewController {
     init(
         collectionID: UUID,
         photos: [EditablePhoto],
-        selectedPreset: PhotoPreset,
         storageService: PhotoCollectionStorageService
     ) {
         guard let firstPhoto = photos.first else {
@@ -143,7 +147,6 @@ final class EditorViewController: UIViewController {
         self.collectionID = collectionID
         self.collectionStorageService = storageService
         self.photos = photos
-        self.selectedPreset = selectedPreset
         self.originalImage = firstPhoto.originalImage
 
         let preview = firstPhoto.originalImage.resizedForEditorPreview(maxPixelSize: 1200)
@@ -486,8 +489,8 @@ final class EditorViewController: UIViewController {
         }
     }
 
-    private func effectiveRecipe(for baseRecipe: EditRecipe) -> EditRecipe {
-        selectedPreset.applying(to: baseRecipe)
+    private func effectiveRecipe(for baseRecipe: EditRecipe, preset: PhotoPreset) -> EditRecipe {
+        preset.applying(to: baseRecipe)
     }
 
     private func showPhoto(at index: Int) {
@@ -530,12 +533,8 @@ final class EditorViewController: UIViewController {
                 renderedPreviewImage = nil
 
                 recipeBeforeAuto = photo.recipeBeforeAuto
-
-                controlsView.setRecipe(
-                    photo.recipe,
-                    animated: false
-                )
-
+                presetPickerView.setSelectedPreset(photo.preset, animated: false)
+                controlsView.setRecipe(photo.recipe, animated: false)
                 actionBarView.setAutoEnabled(photo.recipeBeforeAuto != nil)
 
                 editorImageView.setImage(
@@ -740,10 +739,9 @@ final class EditorViewController: UIViewController {
 
         photos = photos.map { photo in
             var photo = photo
-
             photo.recipe = .neutral
             photo.recipeBeforeAuto = nil
-
+            photo.preset = .none
             return photo
         }
 
@@ -754,8 +752,6 @@ final class EditorViewController: UIViewController {
         isApplyingPhotoState = true
         recipe = .neutral
         isApplyingPhotoState = false
-
-        selectedPreset = .none
 
         actionBarView.setAutoEnabled(false)
         controlsView.setRecipe(.neutral, animated: true)
@@ -879,7 +875,7 @@ final class EditorViewController: UIViewController {
     private func scheduleRenderPreview() {
         previewRenderRequest?.cancel()
 
-        let currentRecipe = effectiveRecipe(for: recipe)
+        let currentRecipe = effectiveRecipe(for: recipe, preset: selectedPreset)
 
         guard !currentRecipe.isNeutral else {
             previewRenderRequest = nil
@@ -1074,7 +1070,7 @@ final class EditorViewController: UIViewController {
     private func renderFullSize(photo: EditablePhoto) async -> UIImage? {
         let pipeline = filterPipeline
         let queue = exportQueue
-        let recipe = effectiveRecipe(for: photo.recipe)
+        let recipe = effectiveRecipe(for: photo.recipe, preset: photo.preset)
 
         return await withCheckedContinuation { continuation in
             queue.async {
@@ -1092,21 +1088,15 @@ final class EditorViewController: UIViewController {
 
     private func scheduleCollectionSave() {
         let storedPhotos = photos.map(\.storedPhoto)
-        let selectedPresetID = selectedPreset.rawValue
-
         collectionSaveTask?.cancel()
 
-        collectionSaveTask = Task {
-            [collectionStorageService, collectionID, selectedPresetID] in
-
+        collectionSaveTask = Task { [collectionStorageService, collectionID] in
             try? await Task.sleep(nanoseconds: 600_000_000)
-
             guard !Task.isCancelled else { return }
 
             try? await collectionStorageService.updateCollection(
                 id: collectionID,
-                photos: storedPhotos,
-                selectedPresetID: selectedPresetID
+                photos: storedPhotos
             )
         }
     }
@@ -1115,13 +1105,11 @@ final class EditorViewController: UIViewController {
         collectionSaveTask?.cancel()
 
         let storedPhotos = photos.map(\.storedPhoto)
-        let selectedPresetID = selectedPreset.rawValue
 
-        Task { [collectionStorageService, collectionID, selectedPresetID] in
+        Task { [collectionStorageService, collectionID] in
             try? await collectionStorageService.updateCollection(
                 id: collectionID,
-                photos: storedPhotos,
-                selectedPresetID: selectedPresetID
+                photos: storedPhotos
             )
         }
     }

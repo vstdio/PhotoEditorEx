@@ -196,7 +196,6 @@ final class CatalogViewController: UIViewController {
                 let editorViewController = EditorViewController(
                     collectionID: collection.id,
                     photos: editablePhotos,
-                    selectedPreset: .none,
                     storageService: storageService
                 )
 
@@ -263,20 +262,14 @@ final class CatalogViewController: UIViewController {
             guard let self else { return }
 
             do {
-                let photos = try await storageService.loadEditablePhotos(
-                    for: collection
-                )
-
-                guard !photos.isEmpty else {
-                    throw PhotoCollectionStorageError.noPhotosImported
-                }
+                let photos = try await storageService.loadEditablePhotos(for: collection)
+                guard !photos.isEmpty else { throw PhotoCollectionStorageError.noPhotosImported }
 
                 setLoading(false)
 
                 let editorViewController = EditorViewController(
                     collectionID: collection.id,
                     photos: photos,
-                    selectedPreset: PhotoPreset(rawValue: collection.selectedPresetID ?? "") ?? .none,
                     storageService: storageService
                 )
 

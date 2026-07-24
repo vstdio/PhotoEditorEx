@@ -12,7 +12,6 @@ struct PhotoCollection: Codable, Identifiable {
     let createdAt: Date
     var updatedAt: Date
     var photos: [PhotoCollectionPhoto]
-    var selectedPresetID: String?
 }
 
 struct PhotoCollectionPhoto: Codable, Identifiable {
@@ -20,4 +19,5 @@ struct PhotoCollectionPhoto: Codable, Identifiable {
     let fileName: String
     var recipe: EditRecipe
     var recipeBeforeAuto: EditRecipe?
+    var selectedPresetID: String? = nil
 }
