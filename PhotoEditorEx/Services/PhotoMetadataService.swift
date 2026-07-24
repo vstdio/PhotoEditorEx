@@ -83,6 +83,7 @@ final class PhotoMetadataService {
         if !fileRows.isEmpty {
             sections.append(PhotoMetadata.Section(
                 title: "File",
+                iconName: "doc.text",
                 rows: fileRows
             ))
         }
@@ -95,6 +96,7 @@ final class PhotoMetadataService {
         if !captureRows.isEmpty {
             sections.append(PhotoMetadata.Section(
                 title: "Capture",
+                iconName: "camera",
                 rows: captureRows
             ))
         }
@@ -104,6 +106,7 @@ final class PhotoMetadataService {
         if !exposureRows.isEmpty {
             sections.append(PhotoMetadata.Section(
                 title: "Exposure",
+                iconName: "camera.aperture",
                 rows: exposureRows
             ))
         }
@@ -113,6 +116,7 @@ final class PhotoMetadataService {
         if !imageRows.isEmpty {
             sections.append(PhotoMetadata.Section(
                 title: "Image",
+                iconName: "photo",
                 rows: imageRows
             ))
         }

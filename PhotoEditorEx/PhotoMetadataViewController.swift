@@ -10,6 +10,8 @@ import SnapKit
 
 final class PhotoMetadataViewController: UIViewController {
 
+    private static let sectionHeaderReuseIdentifier = "PhotoMetadataSectionHeader"
+
     private let metadata: PhotoMetadata
 
     private let tableView: UITableView = {
@@ -49,9 +51,16 @@ final class PhotoMetadataViewController: UIViewController {
         )
 
         tableView.dataSource = self
+        tableView.delegate = self
+
         tableView.register(
             PhotoMetadataCell.self,
             forCellReuseIdentifier: PhotoMetadataCell.reuseIdentifier
+        )
+
+        tableView.register(
+            UITableViewHeaderFooterView.self,
+            forHeaderFooterViewReuseIdentifier: Self.sectionHeaderReuseIdentifier
         )
 
         view.addSubview(tableView)
@@ -83,13 +92,6 @@ extension PhotoMetadataViewController: UITableViewDataSource {
 
     func tableView(
         _ tableView: UITableView,
-        titleForHeaderInSection section: Int
-    ) -> String? {
-        metadata.sections[section].title
-    }
-
-    func tableView(
-        _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(
@@ -109,6 +111,53 @@ extension PhotoMetadataViewController: UITableViewDataSource {
         )
 
         return cell
+    }
+}
+
+extension PhotoMetadataViewController: UITableViewDelegate {
+
+    func tableView(
+        _ tableView: UITableView,
+        viewForHeaderInSection section: Int
+    ) -> UIView? {
+        let section = metadata.sections[section]
+
+        guard let headerView = tableView.dequeueReusableHeaderFooterView(
+            withIdentifier: Self.sectionHeaderReuseIdentifier
+        ) else {
+            return nil
+        }
+
+        var configuration = UIListContentConfiguration.groupedHeader()
+
+        configuration.text = section.title.uppercased()
+        configuration.image = UIImage(systemName: section.iconName)
+        configuration.imageToTextPadding = 8
+
+        configuration.textProperties.font = .systemFont(
+            ofSize: 16,
+            weight: .semibold
+        )
+
+        configuration.textProperties.color = .label
+        configuration.imageProperties.tintColor = .systemBlue
+
+        configuration.imageProperties.preferredSymbolConfiguration =
+            UIImage.SymbolConfiguration(
+                pointSize: 16,
+                weight: .semibold
+            )
+
+        headerView.contentConfiguration = configuration
+
+        return headerView
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        heightForHeaderInSection section: Int
+    ) -> CGFloat {
+        44
     }
 }
 

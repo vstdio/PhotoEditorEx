@@ -12,6 +12,7 @@ struct PhotoMetadata {
 
     struct Section {
         let title: String
+        let iconName: String
         let rows: [Row]
     }
 
