@@ -187,6 +187,8 @@ final class EditorViewController: UIViewController {
         controlsView.setRecipe(recipe, animated: false)
         actionBarView.setAutoEnabled(recipeBeforeAuto != nil)
         editorImageView.setImage(previewImage, resetZoom: true)
+
+        scheduleRenderPreview()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -500,10 +502,15 @@ final class EditorViewController: UIViewController {
         previewRenderRequest?.cancel()
         previewRenderRequest = nil
 
-        autoRequestID = nil
-        isShowingOriginal = false
+        if autoRequestID != nil {
+            autoRequestID = nil
+            setRecipeBeforeAuto(nil)
+            actionBarView.setAutoEnabled(false)
+        }
 
+        isShowingOriginal = false
         currentPhotoIndex = index
+
         updateTitle()
 
         filmstripView.setSelectedIndex(index, animated: true)
@@ -586,10 +593,8 @@ final class EditorViewController: UIViewController {
         scheduleCollectionSave()
     }
 
-    private func updateRecipeManually(
-        _ update: (inout EditRecipe) -> Void
-    ) {
-        if autoRequestID != nil {
+    private func updateRecipeManually(_ update: (inout EditRecipe) -> Void) {
+        if autoRequestID != nil || recipeBeforeAuto != nil {
             autoRequestID = nil
             setRecipeBeforeAuto(nil)
             actionBarView.setAutoEnabled(false)
@@ -711,7 +716,7 @@ final class EditorViewController: UIViewController {
     private func showResetAllConfirmation() {
         let alert = UIAlertController(
             title: "Reset All Changes?",
-            message: "Auto, manual adjustments, and the selected preset will be removed from every photo.",
+            message: "Auto, manual adjustments, and presets will be removed from every photo.",
             preferredStyle: .alert
         )
 
